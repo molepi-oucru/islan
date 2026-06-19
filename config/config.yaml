@@ -1,0 +1,26 @@
+# IS-Seq Pipeline Configuration File
+
+# Target IS element name (matching the name in the primers FASTA file, e.g. ST16:{target_is_element}:HEAD)
+target_is_element: "IS1R_IS1"
+
+# Path to the primers database file
+primers_file: "config/primers.fasta"
+
+# Main pipeline output directory
+output_dir: "results"
+
+# Preprocessing parameters
+preprocessing:
+  min_cov: 0.9
+  min_identity: 0.9
+  min_len: 20
+  index_i5: true
+  len_actual_primer: 20 # Set to integer to enable advanced rescue, e.g. 20
+  threads: 4 # Number of parallel processes to use for read filtering
+  qc: true # Run QC and demultiplexing step on forward reads (default: true)
+
+# Alignment parameters (for future implementation)
+alignment:
+  reference_genome: "data/reference/genome.fasta"
+  threads: 4
+  bwa_mem2_path: "bwa-mem2"
