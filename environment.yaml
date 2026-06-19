@@ -1,0 +1,12 @@
+name: py38_isseq
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.8
+  - biopython=1.81
+  - pyyaml
+  - pip
+    - pip:
+      - plotly
