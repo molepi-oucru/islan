@@ -76,18 +76,18 @@ def process_batch_worker(batch_data, primers, min_cov, min_identity, min_len, in
                 align_len = counts.identities + counts.mismatches + counts.gaps
                 identity = counts.identities / align_len if align_len > 0 else 0.0
                 
-                is_std_match = (cov >= min_cov) and (identity >= min_identity)
-                is_adv_match = False
+                is_full_match = (cov >= min_cov) and (identity >= min_identity)
+                is_partial_match = False
                 
-                if len_actual_primer is not None and not is_std_match:
+                if len_actual_primer is not None and not is_full_match:
                     if len(trimmed_seq) >= len_actual_primer:
                         read_sub = trimmed_seq[:len_actual_primer]
                         primer_sub = p_seq[:len_actual_primer]
                         if read_sub == primer_sub:
-                            is_adv_match = True
+                            is_partial_match = True
                             
-                if is_std_match or is_adv_match:
-                    score = alignment.score if is_std_match else float(len_actual_primer)
+                if is_full_match or is_partial_match:
+                    score = alignment.score if is_full_match else float(len_actual_primer)
                     if best_match is None or score > best_match['score']:
                         best_match = {'type': p_type, 'score': score, 'primer_len': len(p_seq)}
                         

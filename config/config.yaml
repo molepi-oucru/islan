@@ -13,7 +13,7 @@ preprocessing:
   min_len: 20
   index_i5: true
   i5_mismatch: 2
-  len_actual_primer: 20 # Set to integer to enable advanced rescue, e.g. 20
+  len_actual_primer: 20 # Set to integer to enable partial match, e.g. 20
   threads: 8 # Number of parallel processes to use for read filtering
   qc: true # Run QC and demultiplexing step on forward reads (default: true)
 
