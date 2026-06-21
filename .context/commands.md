@@ -27,41 +27,55 @@ pip install -e .
 
 ## Running the Pipeline
 
-### Orchestrator Pipeline
+### Preprocessing & Filtering (`pise pre-process`)
 Run from the root directory:
 - **Single-Sample Mode (using `uv`)**:
   ```bash
-  uv run pise --config config/config.yaml /path/to/reads_1.fastq.gz /path/to/reads_2.fastq.gz --threads 8 --qc True
+  uv run pise pre-process --config config/config.yaml /path/to/reads_1.fastq.gz /path/to/reads_2.fastq.gz --threads 8 --qc True --i5-mismatch 2 --min_len 20
   ```
 - **Single-Sample Mode (using Conda)**:
   ```bash
-  pise --config config/config.yaml /path/to/reads_1.fastq.gz /path/to/reads_2.fastq.gz --threads 8 --qc True
+  pise pre-process --config config/config.yaml /path/to/reads_1.fastq.gz /path/to/reads_2.fastq.gz --threads 8 --qc True --i5-mismatch 2 --min_len 20
   ```
 - **Batch Mode for Multiple Samples (using `uv`)**:
   ```bash
-  uv run pise --threads 8 --qc True /path/to/raw_reads_directory
+  uv run pise pre-process --threads 8 --qc True /path/to/raw_reads_directory
   ```
 - **Batch Mode for Multiple Samples (using Conda)**:
   ```bash
-  pise --threads 8 --qc True /path/to/raw_reads_directory
+  pise pre-process --threads 8 --qc True /path/to/raw_reads_directory
   ```
 
-### Deferred Reverse Reads Extraction
-Extract reverse reads matching your filtered forward reads:
-- **Using Python**:
+### ASV Analysis (`pise asv-analysis`)
+Run ASV analysis:
+```bash
+uv run pise asv-analysis --config config/config.yaml
+```
+
+### Pairing Reverse Reads (`pise pairing`)
+Extract reverse reads matching your filtered forward reads or ID list:
+- **Using forward FASTQ**:
   ```bash
-  python pise/extract_pairs.py \
-    -f results/filtered_reads/sample_index-TargetIS_1_full.fastq.gz \
+  uv run pise pairing \
+    -f results_asv/filtered_reads/sample_1_filtered.fastq.gz \
     -r /path/to/raw_reads_2.fastq.gz \
-    -o results/filtered_reads/sample_index-TargetIS_2_full.fastq.gz
+    -o results_asv/filtered_reads/sample_2_filtered.fastq.gz
+  ```
+- **Using plain text list of IDs**:
+  ```bash
+  uv run pise pairing \
+    -f /path/to/ids.txt \
+    -r /path/to/raw_reads_2.fastq.gz \
+    -o results_asv/filtered_reads/sample_2_filtered.fastq.gz
   ```
 
 ## Running Tests
 - **Using `uv`**:
   ```bash
-  uv run python -m unittest discover -s tests
+  uv run pytest
   ```
 - **Using Conda**:
   ```bash
-  python -m unittest discover -s tests
+  pytest
   ```
+

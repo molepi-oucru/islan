@@ -28,23 +28,26 @@ graph TD
 The pipeline parameterizes its modules via `config/config.yaml`. The schema is defined as:
 
 ```yaml
-# Global Parameters
-target_is_element: "IS1R_IS1"
+# Path to the primers database file
 primers_file: "config/primers.fasta"
-output_dir: "results"
+
+# Main pipeline output directory
+output_dir: "results_asv"
 
 # Preprocessing Step Parameters
 preprocessing:
-  min_cov: 0.98
+  min_cov: 0.9
   min_identity: 0.9
   min_len: 20
   index_i5: true
-  len_actual_primer: null # Optional, set to integer to enable advanced rescue
-  threads: 4 # Number of parallel processes to use for read filtering
+  i5_mismatch: 2
+  len_actual_primer: 20 # Optional, set to integer to enable partial match
+  threads: 8 # Number of parallel processes to use for read filtering
   qc: true # Enable/disable QC and demultiplexing step (default: true)
 
 # Alignment Step Parameters (Future)
 alignment:
   reference_genome: "data/reference/genome.fasta"
   threads: 4
+  bwa_mem2_path: "bwa-mem2"
 ```

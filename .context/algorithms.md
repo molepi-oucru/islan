@@ -12,77 +12,78 @@ Before reads are filtered, an optional Quality Control & Demultiplexing step is 
   - Parses the input forward FASTQ file using a fast 4-line parsing method.
   - Drops **poly-N reads** (sequences consisting entirely of 'N' characters).
   - Extracts the 8-bp i5 index sequence prefix if `index_i5` is `True`.
-  - Demultiplexes reads into up to 5 bins: 4 bins for known IS index sequences from `primers.fasta` and 1 bin for unknown index sequences (`index-unknown`). If `index_i5` is `False` or only 1 index type is detected, all reads route to a single `non-polyN` category.
-  - Calculates length distribution, quality score sums, and index frequencies to build a comprehensive HTML report saved in `qc_reports/`.
+  - Demultiplexes reads using Hamming distance index matching (distance $\le$ `i5-mismatch` tolerance, default 2) based on the known indices in `primers.fasta`.
+  - Reads matching known indices are written to `demux_reads/{sample}_index-{IS_element}_1.fastq.gz`. Reads that do not match any known index are written to `demux_reads/{sample}_index-undetermined_1.fastq.gz`.
+  - Calculates sample index status based on demultiplexing counts:
+    - **`Index failure`**: Expected index reads account for < 30% of total non-poly-N reads. (Downstream filtering for this sample is automatically skipped).
+    - **`Index warning`**: Expected index reads account for $\ge$ 30% of total non-poly-N reads, but another index category also accounts for $\ge$ 30%.
+    - **`Index OK`**: Expected index reads account for $\ge$ 30% of total non-poly-N reads, and no other category accounts for $\ge$ 30%.
 - **Outputs**:
-  - Added to the summary file `pise_summary.tsv` under the columns `QC_Total_Forward_Reads` and `QC_PolyN_Forward_Reads`.
-  - Creates demultiplexed FASTQ files in `filtered_reads/` as inputs to the filtering stage.
+  - Added to the summary file `pise_summary.tsv` under the columns: `Sample_Index`, `IS_element`, `QC_Total_Forward_Reads`, `QC_PolyN_Forward_Reads`, `QC_Undetermined_Forward_Reads`, `QC_NonPolyN_Forward_Reads`, `Filtering_Status`.
+  - Creates demultiplexed FASTQ files in `demux_reads/` as inputs to the filtering stage.
 
 ---
 
-## 1. Reads Filtering Algorithm
+## 1. Reads Filtering & Trimming Algorithm
 
-The core filtering step (implemented in `pise/filter_reads.py`) processes paired-end FASTQ reads to extract sequences containing the target IS-element HEAD/TAIL boundary sequences.
+The core filtering step (implemented in `pise/filter_reads.py`) processes forward reads to trim the index, output filtered forward reads, and extract HEAD/TAIL segments.
 
 ```mermaid
 flowchart TD
-    Start[Read FASTQ Record] --> Prep[Extract sequence string & strip index prefix]
-    Prep --> Align[Full Local Alignment via PairwiseAligner]
+    Start[Read FASTQ Record] --> LenCheck{Read length >= min_len_forward?}
+    LenCheck -- No --> Skip[Skip / Drop Read]
+    LenCheck -- Yes --> Trim[Trim first 8 bp index]
+    Trim --> WriteFilt[Write trimmed read to _1_filtered.fastq.gz]
+    WriteFilt --> ExtractPrefix[Extract first len of primer bp from trimmed read]
+    ExtractPrefix --> Align[Local Alignment of Primer vs Extracted Prefix]
     Align --> CheckC1{Match coverage >= min_cov\nAND identity >= min_identity?}
-    CheckC1 -- Yes (Full) --> CheckC2_Full{Remaining length >= min_len?}
-    CheckC1 -- No --> CheckRescue{len_actual_primer set\nAND remaining length >= min_len?}
-    CheckRescue -- Yes --> CheckExact{First len_actual_primer bases\nmatch sequence 100%?}
-    CheckRescue -- No --> Bin[Classify as Binned Read]
-    CheckExact -- Yes (Partial) --> CheckC2_Part{Remaining length >= min_len?}
-    CheckExact -- No --> Bin
-    CheckC2_Full -- Yes --> Full[Classify as Full matched]
-    CheckC2_Full -- No --> Bin
-    CheckC2_Part -- Yes --> Partial[Classify as Partial matched]
-    CheckC2_Part -- No --> Bin
+    CheckC1 -- Yes (Full Match) --> SaveBest[Identify Best Match]
+    CheckC1 -- No --> CheckRescue{len_actual_primer set\nAND trimmed length >= len_actual_primer?}
+    CheckRescue -- Yes --> CheckExact{First len_actual_primer bases\nmatch primer 100%?}
+    CheckRescue -- No --> Done[Finish processing read]
+    CheckExact -- Yes (Partial Match) --> SaveBest
+    CheckExact -- No --> Done
+    SaveBest --> WriteMatch[Write extracted first len of primer bp to _1_HEAD.fastq.gz or _1_TAIL.fastq.gz]
 ```
 
 ### Algorithmic Parameters
-- **i5 Index Offset (`index_i5`)**: A boolean flag. If `True`, the first `8` bases of each forward read sequence are skipped (derived `index_len = 8`) to bypass the i5 barcode index sequence offset. If `False`, `index_len = 0`.
+- **INDEX_LEN (8 bp)**: The first 8 bases of each forward read sequence are trimmed to remove the i5 barcode index.
+- **Minimum Length Forward (`min_len_forward`)**: Computed as `INDEX_LEN (8bp) + MAX(len(HEAD), len(TAIL)) + min_len (default 20bp)`. Skip reads that are shorter than `min_len_forward`.
 - **Minimum Coverage (`min_cov`)**: The fraction of the target sequence length that must be covered by the local alignment.
 - **Minimum Identity (`min_identity`)**: The alignment identity score (matches divided by total aligned length).
-- **Minimum Remaining Length (`min_len`)**: The required length of the genomic DNA portion of the read following the matched sequence.
-- **Length of Actual Primer (`len_actual_primer`)**: The length of the core prefix of the HEAD/TAIL sequence used for 100% exact-match rescue if the full alignment fails.
+- **Length of Actual Primer (`len_actual_primer`)**: The length of the core prefix of the HEAD/TAIL sequence used for 100% exact-match partial matching if the full alignment fails.
 
 ### Step-by-Step Logic
 
-#### Step 1.1: Index Offset
-For each forward read sequence $S$:
-$$S_{\text{head}} = S[index\_len : index\_len + len(P) + 5]$$
-where $index\_len = 8$ if $index\_i5$ is True else $0$, and $P$ is the target sequence (either `HEAD` or `TAIL`).
+#### Step 1.1: Trimming and Length Filtering
+For each forward read sequence $S$ and quality score $Q$:
+1. If $len(S) < min\_len\_forward$, the read is skipped.
+2. Trim the first 8 bp:
+   $$S_{trimmed} = S[8:]$$
+   $$Q_{trimmed} = Q[8:]$$
+3. Write $S_{trimmed}$ and $Q_{trimmed}$ to the output `{sample}_1_filtered.fastq.gz` file.
 
-#### Step 1.2: Local Alignment
-Full local pairwise alignment is performed between the target sequence $P$ and the read head $S_{\text{head}}$ using `Bio.Align.PairwiseAligner` with scores:
-- Match: `+1.0`
-- Mismatch: `-1.0`
-- Gap: `-1.0`
-
-The alignment returns the start ($start_{\text{target}}$) and end ($end_{\text{target}}$) coordinates of the alignment on the target sequence.
-- **Coverage**:
-  $$\text{cov} = \frac{end_{\text{target}} - start_{\text{target}}}{len(P)}$$
-- **Identity**:
-  $$\text{identity} = \frac{\text{identities}}{\text{identities} + \text{mismatches} + \text{gaps}}$$
-
-#### Step 1.3: Classification & Rescue
-1. **Full Match (Criterion 1)**: If $\text{cov} \ge min\_cov$ and $\text{identity} \ge min\_identity$, the read is classified as a full match.
-2. **Rescue Rule (Criterion 1 & 2 combined)**: If full match fails, but `len_actual_primer` is defined, the remaining sequence length after a potential full alignment is check-validated ($\ge min\_len$). Then, the sub-sequence of the read head starting at the index offset of length `len_actual_primer` is compared:
-   $$S[index\_len : index\_len + len\_actual\_primer] == P[:len\_actual\_primer]$$
-   If it is a 100% exact match, it is classified as a partial match.
-3. **Genomic Portion Check (Criterion 2)**: The remaining genomic portion of the read is calculated:
-   $$\text{length}_{\text{remaining}} = len(S) - (index\_len + end_{\text{target}})$$
-   If $\text{length}_{\text{remaining}} \ge min\_len$, the read passes and is written to the appropriate output FASTQ (`_full.fastq.gz` or `_partial.fastq.gz`). Otherwise, it goes to `_bin.fastq.gz`.
+#### Step 1.2: Local Alignment & Matching
+For each target primer $P$ (HEAD or TAIL) of length $L_P$:
+1. Extract the first $L_P$ bases of the trimmed read:
+   $$S_{head} = S_{trimmed}[:L_P]$$
+2. Perform local pairwise alignment between $P$ and $S_{head}$ using `Bio.Align.PairwiseAligner` with scores: Match: `+1.0`, Mismatch: `-1.0`, Gap: `-1.0`.
+3. Check **Full Match**:
+   $$\text{cov} = \frac{end_{\text{target}} - start_{\text{target}}}{L_P} \ge min\_cov$$
+   $$\text{identity} = \frac{\text{identities}}{\text{identities} + \text{mismatches} + \text{gaps}} \ge min\_identity$$
+4. Check **Partial Match**: If Full Match fails and `len_actual_primer` is defined, check if:
+   $$S_{trimmed}[:len\_actual\_primer] == P[:len\_actual\_primer]$$
+   If so, it is classified as a partial match with a score equivalent to `len_actual_primer`.
+5. If a match is found, the best-scoring match (HEAD or TAIL) is selected.
+6. The exact first $L_P$ bp of the trimmed sequence ($S_{trimmed}[:L_P]$) and its quality scores ($Q_{trimmed}[:L_P]$) are written to `{sample}_1_HEAD.fastq.gz` or `{sample}_1_TAIL.fastq.gz`.
 
 ---
 
 ## 2. Reverse Reads Pairing (Deferred)
 
 Since IS-Seq uses paired-end sequencing, the reverse reads must match the filtered forward reads. Rather than running both simultaneously, the reverse matching is deferred to a separate script `pise/extract_pairs.py`:
-- **Method**: The forward filtering stage generates `_full.fastq.gz` and `_partial.fastq.gz` files containing the filtered forward reads.
-- **Processing**: The `extract_pairs.py` script reads the filtered forward reads file, collects the set of passed read IDs, and scans the raw reverse FASTQ read file sequentially. For any reverse read matching a forward read ID, it writes it to the output reverse FASTQ file.
+- **Method**: The forward filtering stage generates `{sample}_1_filtered.fastq.gz` containing the filtered forward reads.
+- **Processing**: The `extract_pairs.py` script reads the forward FASTQ file (or a plain text file of read IDs), collects the set of passed read IDs, and scans the raw reverse FASTQ read file sequentially. For any reverse read matching a forward read ID, it writes it to the output reverse FASTQ file.
 - **Complexity**: $O(N)$ to build the lookup set of forward IDs, and $O(1)$ lookup complexity per read when scanning the reverse FASTQ. This ensures the output reverse files match the filtered forward files exactly.
 
 ---
@@ -96,4 +97,4 @@ The pipeline utilizes two distinct levels of parallel processing to maximize res
    - **Batching**: Read streams are parsed and chunked into batches of 5000 records.
    - **Serialization**: Read records are serialized as basic python tuples rather than heavy `Bio.SeqRecord` objects, minimizing inter-process communication overhead.
    - **Order Preservation**: The worker pool uses `.imap` which preserves the exact order of the original reads file in the output filtered FASTQ.
-   - **Unknown Index Skipping**: To conserve CPU resources, filtering is automatically skipped for demultiplexed files labeled as `index-unknown`.
+   - **Index Failure Skipping**: To conserve CPU resources, filtering is automatically skipped for samples categorized as `Index failure`.
