@@ -26,19 +26,7 @@ def load_primers(fasta_file_path, target_is_element):
         sys.exit(1)
     return primers
 
-def write_summary_tsv(filepath, stats):
-    try:
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        with open(filepath, 'w') as f:
-            f.write("Metric\tValue\n")
-            for k, v in stats.items():
-                f.write(f"{k}\t{v}\n")
-        logging.info(f"Summary statistics saved to TSV: {filepath}")
-    except Exception as e:
-        logging.error(f"Failed to write summary statistics TSV: {e}")
-
-def process_batch_worker(batch_data, primers, min_cov, min_identity, min_len, index_i5, len_actual_primer):
-    index_len = 8 if index_i5 else 0
+def process_batch_worker(batch_data, primers, min_cov, min_identity, min_len, index_len, min_len_forward, expected_index_seq=None, i5_mismatch=2, len_actual_primer=None):
     from Bio.Align import PairwiseAligner
     aligner = PairwiseAligner()
     aligner.mode = 'local'
@@ -46,113 +34,74 @@ def process_batch_worker(batch_data, primers, min_cov, min_identity, min_len, in
     aligner.mismatch_score = -1.0
     aligner.gap_score = -1.0
 
-    passed_full = []
-    passed_partial = []
-    binned = []
-
-    stats = {
-        'passed_criterion1_full': 0,
-        'passed_criterion1_partial': 0,
-        'passed_criterion2_full': 0,
-        'passed_criterion2_partial': 0,
-        'head_matched_c1_full': 0,
-        'tail_matched_c1_full': 0,
-        'head_matched_c1_partial': 0,
-        'tail_matched_c1_partial': 0,
-        'head_matched_c2_full': 0,
-        'tail_matched_c2_full': 0,
-        'head_matched_c2_partial': 0,
-        'tail_matched_c2_partial': 0
-    }
+    passed_filtered = []
+    passed_head = []
+    passed_tail = []
 
     for record_tuple in batch_data:
         header, read_seq, spacer, qual = record_tuple
         
-        # Poly-N reads are already dropped by QC, but we check just in case
-        if all(c == 'N' for c in read_seq):
+        # 1. Length filter
+        if len(read_seq) < min_len_forward:
             continue
+            
+        # 2. Expected index filter (only if filtering raw read input directly)
+        if expected_index_seq is not None:
+            idx_seq = read_seq[:index_len]
+            if sum(c1 != c2 for c1, c2 in zip(idx_seq, expected_index_seq)) > i5_mismatch:
+                continue
 
+        # 3. Trim i5 index
+        trimmed_seq = read_seq[index_len:]
+        trimmed_qual = qual[index_len:]
+        trimmed_record_str = f"{header}{trimmed_seq}\n{spacer}{trimmed_qual}\n"
+        
+        passed_filtered.append(trimmed_record_str)
+
+        # 4. Local alignment to HEAD/TAIL
         best_match = None
-        best_match_partial = None
-
         for p_type in ['HEAD', 'TAIL']:
             if p_type not in primers: continue
             p_seq = primers[p_type]
-
-            if len(read_seq) >= index_len:
-                read_head = read_seq[index_len : index_len + len(p_seq) + 5]
-                alignments = aligner.align(p_seq, read_head)
-                if alignments:
-                    alignment = alignments[0]
-                    target_start = alignment.aligned[0][0][0]
-                    target_end = alignment.aligned[0][-1][1]
-                    cov = (target_end - target_start) / len(p_seq)
-                    
-                    counts = alignment.counts()
-                    align_len = counts.identities + counts.mismatches + counts.gaps
-                    identity = counts.identities / align_len if align_len > 0 else 0.0
-
-                    is_full_match = (cov >= min_cov) and (identity >= min_identity)
-                    
-                    if is_full_match:
-                        score = alignment.score
-                        if best_match is None or score > best_match['score']:
-                            best_match = {
-                                'type': p_type, 'score': score, 'matched_len': target_end,
-                                'coverage': cov, 'identity': identity, 'is_full': True
-                            }
-                    elif len_actual_primer is not None:
-                        if len(read_seq) - (index_len + target_end) >= min_len:
-                            if len(read_seq) >= index_len + len_actual_primer:
-                                read_sub = read_seq[index_len : index_len + len_actual_primer]
-                                primer_sub = p_seq[:len_actual_primer]
-                                if read_sub == primer_sub:
-                                    score = float(len_actual_primer)
-                                    if best_match_partial is None or score > best_match_partial['score']:
-                                        best_match_partial = {
-                                            'type': p_type, 'score': score, 'matched_len': target_end,
-                                            'coverage': cov, 'identity': identity, 'is_full': False
-                                        }
-
-        matched_record = None
+            
+            read_head = trimmed_seq[:len(p_seq)]
+            alignments = aligner.align(p_seq, read_head)
+            if alignments:
+                alignment = alignments[0]
+                target_start = alignment.aligned[0][0][0]
+                target_end = alignment.aligned[0][-1][1]
+                cov = (target_end - target_start) / len(p_seq)
+                
+                counts = alignment.counts()
+                align_len = counts.identities + counts.mismatches + counts.gaps
+                identity = counts.identities / align_len if align_len > 0 else 0.0
+                
+                is_std_match = (cov >= min_cov) and (identity >= min_identity)
+                is_adv_match = False
+                
+                if len_actual_primer is not None and not is_std_match:
+                    if len(trimmed_seq) >= len_actual_primer:
+                        read_sub = trimmed_seq[:len_actual_primer]
+                        primer_sub = p_seq[:len_actual_primer]
+                        if read_sub == primer_sub:
+                            is_adv_match = True
+                            
+                if is_std_match or is_adv_match:
+                    score = alignment.score if is_std_match else float(len_actual_primer)
+                    if best_match is None or score > best_match['score']:
+                        best_match = {'type': p_type, 'score': score, 'primer_len': len(p_seq)}
+                        
         if best_match is not None:
-            matched_record = best_match
-        elif best_match_partial is not None:
-            matched_record = best_match_partial
-
-        is_written = False
-        out_str = f"{header}{read_seq}\n{spacer}{qual}\n"
-
-        if matched_record is not None:
-            is_full = matched_record['is_full']
-            if is_full:
-                stats['passed_criterion1_full'] += 1
-                if matched_record['type'] == 'HEAD': stats['head_matched_c1_full'] += 1
-                else: stats['tail_matched_c1_full'] += 1
-            else:
-                stats['passed_criterion1_partial'] += 1
-                if matched_record['type'] == 'HEAD': stats['head_matched_c1_partial'] += 1
-                else: stats['tail_matched_c1_partial'] += 1
-
-            remaining_length = len(read_seq) - (index_len + matched_record['matched_len'])
-            if remaining_length >= min_len:
-                if is_full:
-                    stats['passed_criterion2_full'] += 1
-                    if matched_record['type'] == 'HEAD': stats['head_matched_c2_full'] += 1
-                    else: stats['tail_matched_c2_full'] += 1
-                    passed_full.append(out_str)
-                    is_written = True
-                else:
-                    stats['passed_criterion2_partial'] += 1
-                    if matched_record['type'] == 'HEAD': stats['head_matched_c2_partial'] += 1
-                    else: stats['tail_matched_c2_partial'] += 1
-                    passed_partial.append(out_str)
-                    is_written = True
-
-        if not is_written:
-            binned.append(out_str)
-
-    return passed_full, passed_partial, binned, stats
+            p_len = best_match['primer_len']
+            extracted_seq = trimmed_seq[:p_len]
+            extracted_qual = trimmed_qual[:p_len]
+            extracted_record_str = f"{header}{extracted_seq}\n{spacer}{extracted_qual}\n"
+            if best_match['type'] == 'HEAD':
+                passed_head.append(extracted_record_str)
+            elif best_match['type'] == 'TAIL':
+                passed_tail.append(extracted_record_str)
+                
+    return passed_filtered, passed_head, passed_tail, len(batch_data)
 
 def stream_batches(fastq_path, batch_size=5000):
     with gzip.open(fastq_path, "rt") as infile:
@@ -164,8 +113,8 @@ def stream_batches(fastq_path, batch_size=5000):
             spacer = infile.readline()
             qual = infile.readline().strip()
             
-            # Poly-N safety skip
-            if all(c == 'N' for c in seq): continue
+            # Skip poly-N reads (already dropped by QC, but as fallback)
+            if seq and seq[0] == 'N' and seq == 'N' * len(seq): continue
                 
             current_batch.append((header, seq, spacer, qual))
             
@@ -175,19 +124,18 @@ def stream_batches(fastq_path, batch_size=5000):
         if current_batch:
             yield current_batch
 
-def process_forward_reads(forward_fastq_path, primers, min_cov, min_identity, min_len, index_i5, len_actual_primer, output_forward_fastq_path, output_forward_partial_path=None, output_forward_bin_path=None, threads=4):
-    logging.info(f"Processing forward reads from: {forward_fastq_path}")
-    logging.info(f"Using {threads} threads/processes for filtering.")
+def process_forward_reads(forward_fastq_path, primers, min_cov, min_identity, min_len, index_len, min_len_forward,
+                          output_filtered_path, output_head_path, output_tail_path,
+                          expected_index_seq=None, i5_mismatch=2, len_actual_primer=None, threads=4):
+    logging.info(f"Filtering forward reads from: {forward_fastq_path}")
+    logging.info(f"Targeting outputs: {output_filtered_path}, {output_head_path}, {output_tail_path}")
     
-    os.makedirs(os.path.dirname(output_forward_fastq_path), exist_ok=True)
+    os.makedirs(os.path.dirname(output_filtered_path), exist_ok=True)
     
-    total_reads = 0
-    passed_c1_full = passed_c1_partial = 0
-    passed_c2_full = passed_c2_partial = 0
-    head_matched_c1_full = tail_matched_c1_full = 0
-    head_matched_c1_partial = tail_matched_c1_partial = 0
-    head_matched_c2_full = tail_matched_c2_full = 0
-    head_matched_c2_partial = tail_matched_c2_partial = 0
+    total_input = 0
+    total_filtered = 0
+    total_head = 0
+    total_tail = 0
 
     worker_func = partial(
         process_batch_worker,
@@ -195,68 +143,50 @@ def process_forward_reads(forward_fastq_path, primers, min_cov, min_identity, mi
         min_cov=min_cov,
         min_identity=min_identity,
         min_len=min_len,
-        index_i5=index_i5,
+        index_len=index_len,
+        min_len_forward=min_len_forward,
+        expected_index_seq=expected_index_seq,
+        i5_mismatch=i5_mismatch,
         len_actual_primer=len_actual_primer
     )
 
     try:
-        with gzip.open(output_forward_fastq_path, "wt") as outfile_full, \
-             gzip.open(output_forward_bin_path, "wt") as outfile_bin:
+        with gzip.open(output_filtered_path, "wt") as out_filt, \
+             gzip.open(output_head_path, "wt") as out_head, \
+             gzip.open(output_tail_path, "wt") as out_tail:
              
-            outfile_partial = None
-            if output_forward_partial_path:
-                outfile_partial = gzip.open(output_forward_partial_path, "wt")
-
             batches_gen = stream_batches(forward_fastq_path, batch_size=5000)
 
             with multiprocessing.Pool(processes=threads) as pool:
-                for passed_full, passed_partial, binned, batch_stats in pool.imap(worker_func, batches_gen):
-                    for fq_str in passed_full:
-                        outfile_full.write(fq_str)
-                    if outfile_partial:
-                        for fq_str in passed_partial:
-                            outfile_partial.write(fq_str)
-                    for fq_str in binned:
-                        outfile_bin.write(fq_str)
+                for passed_filtered, passed_head, passed_tail, batch_size in pool.imap(worker_func, batches_gen):
+                    for record_str in passed_filtered:
+                        out_filt.write(record_str)
+                    for record_str in passed_head:
+                        out_head.write(record_str)
+                    for record_str in passed_tail:
+                        out_tail.write(record_str)
 
-                    # Update stats
-                    total_reads += len(passed_full) + len(passed_partial) + len(binned)
-                    passed_c1_full += batch_stats['passed_criterion1_full']
-                    passed_c1_partial += batch_stats['passed_criterion1_partial']
-                    passed_c2_full += batch_stats['passed_criterion2_full']
-                    passed_c2_partial += batch_stats['passed_criterion2_partial']
-                    
-                    head_matched_c1_full += batch_stats['head_matched_c1_full']
-                    tail_matched_c1_full += batch_stats['tail_matched_c1_full']
-                    head_matched_c1_partial += batch_stats['head_matched_c1_partial']
-                    tail_matched_c1_partial += batch_stats['tail_matched_c1_partial']
-                    
-                    head_matched_c2_full += batch_stats['head_matched_c2_full']
-                    tail_matched_c2_full += batch_stats['tail_matched_c2_full']
-                    head_matched_c2_partial += batch_stats['head_matched_c2_partial']
-                    tail_matched_c2_partial += batch_stats['tail_matched_c2_partial']
-
-            if outfile_partial:
-                outfile_partial.close()
+                    total_filtered += len(passed_filtered)
+                    total_head += len(passed_head)
+                    total_tail += len(passed_tail)
+                    total_input += batch_size
 
     except Exception as e:
         logging.error(f"Error during parallel filtering: {e}")
         sys.exit(1)
 
+    passed_pct = (total_filtered / total_input * 100) if total_input > 0 else 0
+    head_pct = (total_head / total_filtered * 100) if total_filtered > 0 else 0
+    tail_pct = (total_tail / total_filtered * 100) if total_filtered > 0 else 0
+
+    logging.info(f"Filtering Complete: {total_filtered} reads passed length filter ({passed_pct:.2f}% of input reads).")
+    logging.info(f"  - Classified HEAD: {total_head} ({head_pct:.2f}%)")
+    logging.info(f"  - Classified TAIL: {total_tail} ({tail_pct:.2f}%)")
+
     return {
-        'total_reads': total_reads,
-        'passed_c1_full': passed_c1_full,
-        'passed_c1_partial': passed_c1_partial,
-        'passed_c2_full': passed_c2_full,
-        'passed_c2_partial': passed_c2_partial,
-        'head_c1_full': head_matched_c1_full,
-        'tail_c1_full': tail_matched_c1_full,
-        'head_c1_partial': head_matched_c1_partial,
-        'tail_c1_partial': tail_matched_c1_partial,
-        'head_c2_full': head_matched_c2_full,
-        'tail_c2_full': tail_matched_c2_full,
-        'head_c2_partial': head_matched_c2_partial,
-        'tail_c2_partial': tail_matched_c2_partial
+        'total_filtered': total_filtered,
+        'total_head': total_head,
+        'total_tail': total_tail
     }
 
 def main():

@@ -11,33 +11,50 @@ def setup_logging():
         datefmt='%Y-%m-%d %H:%M:%S'
     )
 
-def extract_pairs(forward_fastq, reverse_fastq_raw, output_reverse_fastq):
-    """
-    Extracts reads from reverse_fastq_raw that have an ID present in forward_fastq.
-    This uses native 4-line parsing for extreme speed.
-    """
-    logging.info(f"Extracting valid pairs from {reverse_fastq_raw} based on {forward_fastq}")
+def load_ids(file_path):
+    import gzip
+    ids = set()
+    is_gz = file_path.endswith(".gz")
+    open_func = gzip.open if is_gz else open
+    mode = "rt" if is_gz else "r"
     
-    valid_ids = set()
-    # 1. Collect valid IDs from forward file
     try:
-        with gzip.open(forward_fastq, "rt") as f_in:
-            while True:
-                header = f_in.readline()
-                if not header: break
-                f_in.readline() # seq
-                f_in.readline() # spacer
-                f_in.readline() # qual
-                # Extract ID: @M01234:56... 1:N:0:1 -> M01234:56...
-                rec_id = header.strip()[1:].split()[0]
-                valid_ids.add(rec_id)
-    except FileNotFoundError:
-        logging.error(f"Forward file not found: {forward_fastq}")
+        with open_func(file_path, mode) as f:
+            first_line = f.readline()
+            if not first_line:
+                return ids
+                
+            f.seek(0)
+            if first_line.startswith("@"):
+                # FASTQ format
+                while True:
+                    header = f.readline()
+                    if not header: break
+                    f.readline() # seq
+                    f.readline() # spacer
+                    f.readline() # qual
+                    rec_id = header.strip()[1:].split()[0]
+                    ids.add(rec_id)
+            else:
+                # Plain text format (one ID per line)
+                for line in f:
+                    stripped = line.strip()
+                    if stripped:
+                        ids.add(stripped.split()[0])
+    except Exception as e:
+        logging.error(f"Error reading ID file '{file_path}': {e}")
         sys.exit(1)
-        
-    logging.info(f"Collected {len(valid_ids)} valid read IDs from forward file.")
+    return ids
+
+def extract_pairs(id_or_fastq_path, reverse_fastq_raw, output_reverse_fastq):
+    """
+    Extracts reads from reverse_fastq_raw that have an ID present in id_or_fastq_path.
+    """
+    logging.info(f"Extracting valid pairs from {reverse_fastq_raw} based on {id_or_fastq_path}")
     
-    # 2. Extract matching reverse reads
+    valid_ids = load_ids(id_or_fastq_path)
+    logging.info(f"Loaded {len(valid_ids)} unique read IDs.")
+    
     extracted = 0
     total = 0
     try:
@@ -63,8 +80,8 @@ def extract_pairs(forward_fastq, reverse_fastq_raw, output_reverse_fastq):
 
 def main():
     setup_logging()
-    parser = argparse.ArgumentParser(description="Extract reverse reads matching a filtered forward FASTQ")
-    parser.add_argument("-f", "--forward", required=True, help="Filtered forward FASTQ (.gz)")
+    parser = argparse.ArgumentParser(description="Extract reverse reads matching a filtered forward FASTQ or ID list")
+    parser.add_argument("-f", "--forward", required=True, help="Filtered forward FASTQ (.gz) or ID text file")
     parser.add_argument("-r", "--reverse", required=True, help="Raw reverse FASTQ (.gz)")
     parser.add_argument("-o", "--output", required=True, help="Output reverse FASTQ (.gz)")
     args = parser.parse_args()

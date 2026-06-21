@@ -49,12 +49,12 @@ def generate_qc_report(sample_name, output_dir, total_reads, polyn_reads, length
     
     # 3. Index Frequencies
     if index_i5 and category_counts:
-        categories = ["IS1R", "ISAeme19", "ISKox3", "ISKpn26", "unknown"]
+        categories = ["IS1R", "ISAeme19", "ISKox3", "ISKpn26", "undetermined"]
         counts = [category_counts[c] for c in categories]
         
         colors = []
         for c in categories:
-            if c == "unknown":
+            if c == "undetermined":
                 colors.append("red")
             elif c == expected_category:
                 colors.append("green")
@@ -111,9 +111,10 @@ def generate_qc_report(sample_name, output_dir, total_reads, polyn_reads, length
 
 def get_or_create_handle(category, sample_name, output_dir, file_handles, output_files):
     if category not in file_handles:
-        # File name pattern: sample_indexCategory_1.fastq.gz
         if category == "non-polyN":
             out_name = f"{sample_name}_non-polyN_1.fastq.gz"
+        elif category == "undetermined":
+            out_name = f"{sample_name}_index-undetermined_1.fastq.gz"
         else:
             out_name = f"{sample_name}_index-{category.split('_')[0]}_1.fastq.gz"
         out_path = os.path.join(output_dir, out_name)
@@ -121,11 +122,15 @@ def get_or_create_handle(category, sample_name, output_dir, file_handles, output
         file_handles[category] = gzip.open(out_path, "wt")
     return file_handles[category]
 
-def run_qc(fastq_path, sample_name, output_dir, primers_fasta_path, primers=None, index_i5=True):
+def hamming_distance(s1, s2):
+    return sum(c1 != c2 for c1, c2 in zip(s1, s2))
+
+def run_qc(fastq_path, sample_name, output_dir, primers_fasta_path, primers=None, index_i5=True, i5_mismatch=2):
     """
     Runs QC and demultiplexes forward reads by index. Poly-N reads are dropped.
-    Returns a list of created output fastq files for downstream filtering.
+    Returns total_reads, polyn_reads, category_counts, and created output fastq files.
     """
+    # E.g. sample_name: "278-IS1R" -> expected_category: "IS1R"
     expected_category = sample_name.split('-')[-1]
     
     total_reads = 0
@@ -142,23 +147,17 @@ def run_qc(fastq_path, sample_name, output_dir, primers_fasta_path, primers=None
         "ISAeme19": 0,
         "ISKox3": 0,
         "ISKpn26": 0,
-        "unknown": 0
+        "undetermined": 0
     })
     
-    # Load the 4 known indices from primers.fasta
+    # Load the known indices from primers.fasta
     known_indices = load_known_indices(primers_fasta_path) if index_i5 else {}
-    # Cache mapping from index sequence to (category_full_name, category_prefix) to avoid string splits and loops
-    known_indices_map = {kn_seq: (is_element, is_element.split('_')[0]) for is_element, kn_seq in known_indices.items()}
     
-    # expected_categories determined from sample name
-            
     primer_variations = {
         'HEAD': defaultdict(lambda: Counter()),
         'TAIL': defaultdict(lambda: Counter())
     }
     
-    # We will output up to 5 demultiplexed files directly in output_dir
-    # e.g., output_dir is preprocess_output_dir (results/filtered_reads)
     output_files = []
     file_handles = {}
 
@@ -177,7 +176,7 @@ def run_qc(fastq_path, sample_name, output_dir, primers_fasta_path, primers=None
                     continue
                 
                 length_dist[len(seq)] += 1
-                # Downsample quality profiling (1 in 10 reads) for a 10x speedup in the inner char loop
+                # Downsample quality profiling (1 in 10 reads)
                 if total_reads % 10 == 0:
                     for i, q in enumerate(qual_str):
                         quality_sums[i] += ord(q) - 33
@@ -189,27 +188,37 @@ def run_qc(fastq_path, sample_name, output_dir, primers_fasta_path, primers=None
                     idx_seq = seq[:index_len]
                     index_counts[idx_seq] += 1
                     
-                    # Demultiplex routing using precomputed map
-                    if idx_seq in known_indices_map:
-                        category, category_prefix = known_indices_map[idx_seq]
+                    # Find closest known index sequence within mismatch tolerance
+                    best_dist = i5_mismatch + 1
+                    best_category = None
+                    best_prefix = None
+                    
+                    for is_element, kn_seq in known_indices.items():
+                        dist = hamming_distance(idx_seq, kn_seq)
+                        if dist < best_dist:
+                            best_dist = dist
+                            best_category = is_element
+                            best_prefix = is_element.split('_')[0]
+                            
+                    if best_category is not None:
+                        category = best_category
+                        category_prefix = best_prefix
                     else:
-                        category = "unknown"
-                        category_prefix = "unknown"
+                        category = "undetermined"
+                        category_prefix = "undetermined"
                     
                     category_counts[category_prefix] += 1
                     
                     # Base variation calculation - only for the true expected category prefix
                     if primers and category_prefix == expected_category:
                         for p_type, p_seq in primers.items():
-                            # Match the start of the primer sequence portion of the read
                             if len(seq) >= index_len + 8 and seq[index_len : index_len + 8] == p_seq[:8]:
                                 sub_seq = seq[index_len : index_len + len(p_seq)]
                                 for pos in range(min(len(sub_seq), len(p_seq))):
                                     match_char = "Match" if sub_seq[pos] == p_seq[pos] else f"Mismatch ({sub_seq[pos]})"
                                     primer_variations[p_type][pos][match_char] += 1
                                     
-                # Write natively to the assigned demux handle
-                # We skip SeqIO for massive speedup
+                # Write to the assigned demux handle
                 handle = get_or_create_handle(category, sample_name, output_dir, file_handles, output_files)
                 handle.write(f"{header}{seq}\n+\n{qual_str}\n")
                 
@@ -223,13 +232,9 @@ def run_qc(fastq_path, sample_name, output_dir, primers_fasta_path, primers=None
         for fh in file_handles.values():
             fh.close()
             
-    # Generate report in qc_reports directory (one level up from output_dir if output_dir is filtered_reads)
-    # Actually, we should output report to a dedicated qc_reports dir
+    # Generate report in qc_reports directory
     qc_dir = os.path.join(os.path.dirname(output_dir), "qc_reports")
     generate_qc_report(sample_name, qc_dir, total_reads, polyn_reads, 
-                       length_dist, quality_sums, quality_counts, category_counts, expected_category, primer_variations, index_i5)
+                        length_dist, quality_sums, quality_counts, category_counts, expected_category, primer_variations, index_i5)
                        
-    # If index_counts has only 1 unique index (or none), and category is "unknown" or known, it's fine.
-    # The handles are already closed.
-    
-    return total_reads, polyn_reads, output_files
+    return total_reads, polyn_reads, category_counts, output_files
