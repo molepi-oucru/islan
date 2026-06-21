@@ -1,4 +1,4 @@
-# pise: IS-Seq Sequencing Data Analysis Pipeline
+# PISE: Processing IS-Seq Sequencing Data
 
 A modular Python package and command-line pipeline for preprocessing and analyzing Insertion Sequence Sequencing (IS-Seq) reads.
 
