@@ -69,42 +69,59 @@ This registers the CLI command `pise` directly in your environment.
 
 ## Running the Pipeline
 
-The pipeline processes forward reads first (QC -> Demultiplexing -> Filtering) and defers reverse read matching.
+The pipeline uses a modular subcommand-based command line interface:
 
-### 1. Preprocessing & Filtering
-Run the orchestrator by passing your raw forward FASTQ reads file and the optional raw reverse FASTQ reads file:
+### 1. Preprocessing & Filtering (`pise pre-process`)
+Run the preprocessing step by passing your raw forward FASTQ reads file and the optional raw reverse FASTQ reads file:
 ```bash
-pise \
+pise pre-process \
   --config config/config.yaml \
   --threads 4 \
   --qc True \
+  --i5-mismatch 2 \
+  --min_len 20 \
   /path/to/raw_reads_1.fastq.gz \
   /path/to/raw_reads_2.fastq.gz
 ```
 You can also run in **batch mode** by passing a directory of raw reads:
 ```bash
-pise \
+pise pre-process \
   --config config/config.yaml \
   --threads 4 \
   /path/to/raw_reads_directory
 ```
 
-*Note on QC / Demultiplexing:*
-* QC is controlled via `--qc True` (default) or `--qc False`. 
-* Poly-N reads are dropped, and index demultiplexing is performed based on the 8-bp i5 index prefixes in `config/primers.fasta`.
-* The filtering step will automatically skip files containing unknown indices (`index-unknown`).
+*Notes on Preprocessing:*
+* QC & demultiplexing are controlled via `--qc True` (default) or `--qc False`. 
+* Poly-N reads are dropped, and index demultiplexing is performed based on the 8-bp i5 index prefixes in `config/primers.fasta` with a mismatch tolerance specified by `--i5-mismatch` (default 2).
+* Samples with expected index reads < 30% of total non-poly-N reads are classified as "Index failure" and automatically skipped in the downstream filtering.
+* Valid samples are trimmed by 8 bp, length-filtered with `MIN_LEN_FORWARD`, and split into HEAD/TAIL files based on local alignment match.
+* The processing statistics and classifications are saved to `pise_summary.tsv` in the output directory.
 
-### 2. Extracting Reverse Reads
-After filtering, you can extract the reverse reads matching the filtered forward reads using `extract_pairs.py`:
+### 2. ASV Analysis (`pise asv-analysis`)
+Runs Amplicon Sequence Variant analysis:
 ```bash
-python pise/extract_pairs.py \
-  -f results/filtered_reads/sample_index-TargetIS_1_full.fastq.gz \
+pise asv-analysis --config config/config.yaml
+```
+
+### 3. Extracting Reverse Reads (`pise pairing`)
+Extract the reverse reads matching the filtered forward reads or a list of read IDs:
+```bash
+pise pairing \
+  -f results/sample_1_filtered.fastq.gz \
   -r /path/to/raw_reads_2.fastq.gz \
-  -o results/filtered_reads/sample_index-TargetIS_2_full.fastq.gz
+  -o results/sample_2_filtered.fastq.gz
+```
+Or with a plain text file containing one ID per line:
+```bash
+pise pairing \
+  -f /path/to/id_list.txt \
+  -r /path/to/raw_reads_2.fastq.gz \
+  -o results/sample_2_filtered.fastq.gz
 ```
 
 ## Running Tests
 Run unit tests to verify package integrity:
 ```bash
-python -m unittest discover -s tests
+uv run pytest
 ```
