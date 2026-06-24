@@ -57,16 +57,16 @@ Extract reverse reads matching your filtered forward reads or ID list:
 - **Using forward FASTQ**:
   ```bash
   uv run pise pairing \
-    -f results_asv/filtered_reads/sample_1_filtered.fastq.gz \
+    -f results_asv/filtered_reads/sample_filtered_1.fastq.gz \
     -r /path/to/raw_reads_2.fastq.gz \
-    -o results_asv/filtered_reads/sample_2_filtered.fastq.gz
+    -o results_asv/filtered_reads/sample_filtered_2.fastq.gz
   ```
 - **Using plain text list of IDs**:
   ```bash
   uv run pise pairing \
     -f /path/to/ids.txt \
     -r /path/to/raw_reads_2.fastq.gz \
-    -o results_asv/filtered_reads/sample_2_filtered.fastq.gz
+    -o results_asv/filtered_reads/sample_filtered_2.fastq.gz
   ```
 
 ## Running Tests

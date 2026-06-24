@@ -73,5 +73,45 @@ class TestPISEModules(unittest.TestCase):
         except ImportError as e:
             self.fail(f"Could not import run_preprocess from pise.preprocess: {e}")
 
+    def test_extract_pairs_logic(self):
+        from pise.extract_pairs import extract_pairs
+        
+        # Create temp files
+        with tempfile.NamedTemporaryFile(suffix='.fastq.gz', delete=False) as f_fw, \
+             tempfile.NamedTemporaryFile(suffix='.fastq.gz', delete=False) as f_rv_raw, \
+             tempfile.NamedTemporaryFile(suffix='.fastq.gz', delete=False) as f_rv_out:
+            
+            f_fw_path = f_fw.name
+            f_rv_raw_path = f_rv_raw.name
+            f_rv_out_path = f_rv_out.name
+            
+        try:
+            # Write 2 matching forward reads
+            with gzip.open(f_fw_path, 'wt') as gz_out:
+                gz_out.write("@read1 1:N:0:1\nACGT\n+\nIIII\n")
+                gz_out.write("@read3\nTGCA\n+\n####\n")
+                
+            # Write 3 raw reverse reads (read1, read2, read3)
+            with gzip.open(f_rv_raw_path, 'wt') as gz_out:
+                gz_out.write("@read1 2:N:0:1\nACGT_REV\n+\nIIII_REV\n")
+                gz_out.write("@read2\nTGCA_REV\n+\n####_REV\n")
+                gz_out.write("@read3\nGGGG\n+\nJJJJ\n")
+                
+            # Run pairing
+            extract_pairs(f_fw_path, f_rv_raw_path, f_rv_out_path)
+            
+            # Read output
+            with gzip.open(f_rv_out_path, 'rt') as gz_in:
+                lines = gz_in.readlines()
+                
+            # Should have read1 and read3, but NOT read2
+            self.assertEqual(len(lines), 8) # 2 reads * 4 lines
+            self.assertEqual(lines[0], "@read1 2:N:0:1\n")
+            self.assertEqual(lines[4], "@read3\n")
+        finally:
+            os.remove(f_fw_path)
+            os.remove(f_rv_raw_path)
+            os.remove(f_rv_out_path)
+
 if __name__ == '__main__':
     unittest.main()

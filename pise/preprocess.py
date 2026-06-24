@@ -312,9 +312,9 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
             known_indices = load_known_indices(primers_file)
             expected_index_seq = known_indices.get(cur_target, None)
 
-        out_filt = os.path.join(preprocess_output_dir, f"{cur_sample}_1_filtered.fastq.gz")
-        out_head = os.path.join(preprocess_output_dir, f"{cur_sample}_1_HEAD.fastq.gz")
-        out_tail = os.path.join(preprocess_output_dir, f"{cur_sample}_1_TAIL.fastq.gz")
+        out_filt = os.path.join(preprocess_output_dir, f"{cur_sample}_filtered_1.fastq.gz")
+        out_head = os.path.join(preprocess_output_dir, f"{cur_sample}_filtered_1_HEAD.fastq.gz")
+        out_tail = os.path.join(preprocess_output_dir, f"{cur_sample}_filtered_1_TAIL.fastq.gz")
 
         filter_res = filter_reads.process_forward_reads(
             filter_input_file, primers, min_cov, min_identity, min_len_val, INDEX_LEN, min_len_forward,

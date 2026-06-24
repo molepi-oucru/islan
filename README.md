@@ -108,16 +108,16 @@ pise asv-analysis --config config/config.yaml
 Extract the reverse reads matching the filtered forward reads or a list of read IDs:
 ```bash
 pise pairing \
-  -f results/sample_1_filtered.fastq.gz \
+  -f results_asv/filtered_reads/sample_filtered_1.fastq.gz \
   -r /path/to/raw_reads_2.fastq.gz \
-  -o results/sample_2_filtered.fastq.gz
+  -o results_asv/filtered_reads/sample_filtered_2.fastq.gz
 ```
 Or with a plain text file containing one ID per line:
 ```bash
 pise pairing \
   -f /path/to/id_list.txt \
   -r /path/to/raw_reads_2.fastq.gz \
-  -o results/sample_2_filtered.fastq.gz
+  -o results_asv/filtered_reads/sample_filtered_2.fastq.gz
 ```
 
 ## Running Tests

@@ -1,6 +1,7 @@
 import os
 import sys
 import argparse
+import logging
 
 def str2bool(v):
     if isinstance(v, bool): return v
@@ -9,6 +10,12 @@ def str2bool(v):
     else: raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+
     parser = argparse.ArgumentParser(description="pise: Pipeline for IS-Seq sequencing data analysis.")
     subparsers = parser.add_subparsers(dest="subcommand", required=True, help="Subcommand to run")
 

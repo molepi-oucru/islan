@@ -33,7 +33,7 @@ flowchart TD
     Start[Read FASTQ Record] --> LenCheck{Read length >= min_len_forward?}
     LenCheck -- No --> Skip[Skip / Drop Read]
     LenCheck -- Yes --> Trim[Trim first 8 bp index]
-    Trim --> WriteFilt[Write trimmed read to _1_filtered.fastq.gz]
+    Trim --> WriteFilt[Write trimmed read to _filtered_1.fastq.gz]
     WriteFilt --> ExtractPrefix[Extract first len of primer bp from trimmed read]
     ExtractPrefix --> Align[Local Alignment of Primer vs Extracted Prefix]
     Align --> CheckC1{Match coverage >= min_cov\nAND identity >= min_identity?}
@@ -43,7 +43,7 @@ flowchart TD
     CheckRescue -- No --> Done[Finish processing read]
     CheckExact -- Yes (Partial Match) --> SaveBest
     CheckExact -- No --> Done
-    SaveBest --> WriteMatch[Write extracted first len of primer bp to _1_HEAD.fastq.gz or _1_TAIL.fastq.gz]
+    SaveBest --> WriteMatch[Write extracted first len of primer bp to _filtered_1_HEAD.fastq.gz or _filtered_1_TAIL.fastq.gz]
 ```
 
 ### Algorithmic Parameters
@@ -61,7 +61,7 @@ For each forward read sequence $S$ and quality score $Q$:
 2. Trim the first 8 bp:
    $$S_{trimmed} = S[8:]$$
    $$Q_{trimmed} = Q[8:]$$
-3. Write $S_{trimmed}$ and $Q_{trimmed}$ to the output `{sample}_1_filtered.fastq.gz` file.
+3. Write $S_{trimmed}$ and $Q_{trimmed}$ to the output `{sample}_filtered_1.fastq.gz` file.
 
 #### Step 1.2: Local Alignment & Matching
 For each target primer $P$ (HEAD or TAIL) of length $L_P$:
@@ -75,14 +75,14 @@ For each target primer $P$ (HEAD or TAIL) of length $L_P$:
    $$S_{trimmed}[:len\_actual\_primer] == P[:len\_actual\_primer]$$
    If so, it is classified as a partial match with a score equivalent to `len_actual_primer`.
 5. If a match is found, the best-scoring match (HEAD or TAIL) is selected.
-6. The exact first $L_P$ bp of the trimmed sequence ($S_{trimmed}[:L_P]$) and its quality scores ($Q_{trimmed}[:L_P]$) are written to `{sample}_1_HEAD.fastq.gz` or `{sample}_1_TAIL.fastq.gz`.
+6. The exact first $L_P$ bp of the trimmed sequence ($S_{trimmed}[:L_P]$) and its quality scores ($Q_{trimmed}[:L_P]$) are written to `{sample}_filtered_1_HEAD.fastq.gz` or `{sample}_filtered_1_TAIL.fastq.gz`.
 
 ---
 
 ## 2. Reverse Reads Pairing (Deferred)
 
 Since IS-Seq uses paired-end sequencing, the reverse reads must match the filtered forward reads. Rather than running both simultaneously, the reverse matching is deferred to a separate script `pise/extract_pairs.py`:
-- **Method**: The forward filtering stage generates `{sample}_1_filtered.fastq.gz` containing the filtered forward reads.
+- **Method**: The forward filtering stage generates `{sample}_filtered_1.fastq.gz` containing the filtered forward reads.
 - **Processing**: The `extract_pairs.py` script reads the forward FASTQ file (or a plain text file of read IDs), collects the set of passed read IDs, and scans the raw reverse FASTQ read file sequentially. For any reverse read matching a forward read ID, it writes it to the output reverse FASTQ file.
 - **Complexity**: $O(N)$ to build the lookup set of forward IDs, and $O(1)$ lookup complexity per read when scanning the reverse FASTQ. This ensures the output reverse files match the filtered forward files exactly.
 
