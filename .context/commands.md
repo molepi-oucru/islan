@@ -69,6 +69,29 @@ Extract reverse reads matching your filtered forward reads or ID list:
     -o results_asv/filtered_reads/sample_filtered_2.fastq.gz
   ```
 
+### IS Mapping (`pise is-mapping`)
+Map filtered reads to identify insertion sites on a reference genome.
+- **WGS Mode**: Map raw forward/reverse reads:
+  ```bash
+  uv run pise is-mapping --mode wgs \
+    -1 /path/to/sample_R1.fastq.gz -2 /path/to/sample_R2.fastq.gz \
+    --is_query /path/to/IS.fasta \
+    --ref_seq /path/to/reference.gbk \
+    --output_dir results_wgs_mapping
+  ```
+- **Targeted Mode**: Map filtered and extracted HEAD/TAIL reads directly:
+  ```bash
+  uv run pise is-mapping --mode targeted \
+    --filtered_forward results_asv/filtered_reads/sample_filtered_1.fastq.gz \
+    --filtered_reverse results_asv/filtered_reads/sample_filtered_2.fastq.gz \
+    --filtered_head results_asv/filtered_reads/sample_filtered_1_HEAD.fastq.gz \
+    --filtered_tail results_asv/filtered_reads/sample_filtered_1_TAIL.fastq.gz \
+    --ref_seq /path/to/reference.gbk \
+    --min_endogenous_depth 50 \
+    --output_dir results_targeted_mapping
+  ```
+
+
 ## Running Tests
 - **Using `uv`**:
   ```bash

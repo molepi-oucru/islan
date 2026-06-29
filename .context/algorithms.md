@@ -98,3 +98,27 @@ The pipeline utilizes two distinct levels of parallel processing to maximize res
    - **Serialization**: Read records are serialized as basic python tuples rather than heavy `Bio.SeqRecord` objects, minimizing inter-process communication overhead.
    - **Order Preservation**: The worker pool uses `.imap` which preserves the exact order of the original reads file in the output filtered FASTQ.
    - **Index Failure Skipping**: To conserve CPU resources, filtering is automatically skipped for samples categorized as `Index failure`.
+
+---
+
+## 4. IS Mapping & Tandem Classification Algorithm (`pise is-mapping`)
+
+The mapping stage aligns preprocessed reads to the reference sequence and uses a 3-stage coordinate pairing logic to characterize insertions.
+
+### Step 4.1: Reference Guided Target Scan (Stage 1)
+1. Target elements with suffix `:FULL` in [targets.fasta](file:///data/SiNguyen/1.SIXTEEN/IS-SEQ/PISE/config/targets.fasta) are aligned against the reference using `bwa mem -a`.
+2. Precise genomic start, end, and orientation boundaries are stored for each known target copy.
+3. Flanking `HEAD` and `TAIL` peaks within a `--flank-len` (default 300 bp) window around these boundaries are paired and flagged as `Known Pair` hits.
+
+### Step 4.2: Novel Insertion & Tandem Characterization (Stage 2)
+Active un-paired peaks are resolved using coordinate overlap definitions:
+- **Tandem Same-Direction (`++` or `--`)**: `l_peak_1` (HEAD) partially overlaps central fully overlapping pair `[r_peak_1, l_peak_2]`, which partially overlaps `r_peak_2` (TAIL).
+- **Tandem Opposite-Direction (`+-`)**: Multiple `HEAD` peaks (`lp1`, `lp2`) partially overlap a single central `rpN` (TAIL).
+- **Tandem Opposite-Direction (`-+`)**: Multiple `TAIL` peaks (`rp1`, `rp2`) partially overlap a single central `lpN` (HEAD).
+- **Novel Pair (TSD)**: Remaining `HEAD` and `TAIL` peaks partially overlap (typically $< 100$ bp).
+- **Novel Pair (Standard)**: Remaining `HEAD` and `TAIL` peaks are within 100 bp gap distance but do not overlap.
+
+### Step 4.3: Noise and Singleton Resolution (Stage 3)
+- **PCR Off-Target Noise**: Remaining `HEAD` and `TAIL` peaks that fully overlap (containment ratio $> 90\%$) are classified as `Off-Target Amplicon (Noise)`.
+- **Singletons**: Remaining un-paired peaks are classified as `HEAD-only` or `TAIL-only` singletons.
+- **Output Split**: Paired hits (Stages 1 and 2) are written to `{sample}_table.tsv` with flanking gene annotations. Singletons and Noise are written to `{sample}_unpaired.tsv` with gene columns omitted. Depth stats are reported as median and IQR.

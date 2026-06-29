@@ -4,13 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pise"
-version = "0.1.0"
+version = "1.0.0"
 description = "Pipeline for IS-Seq sequencing data analysis"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "biopython>=1.81",
+    "pandas",
     "plotly",
+    "pyfastx>=2.3.1",
     "pytest",
 ]
 

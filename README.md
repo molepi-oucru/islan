@@ -120,6 +120,37 @@ pise pairing \
   -o results_asv/filtered_reads/sample_filtered_2.fastq.gz
 ```
 
+### 4. IS Mapping (`pise is-mapping`)
+Map filtered reads to identify insertion sites on a reference genome.
+
+- **WGS Mode**: Map raw forward/reverse reads:
+  ```bash
+  pise is-mapping \
+    --reads /path/to/sample_R1.fastq.gz /path/to/sample_R2.fastq.gz \
+    --queries /path/to/IS.fasta \
+    --reference /path/to/reference.gbk \
+    --output_dir results_wgs_mapping
+  ```
+- **Targeted Mode**: Map filtered and extracted HEAD/TAIL reads directly:
+  ```bash
+  pise is-mapping --targeted \
+    --head results_asv/filtered_reads/sample_filtered_1_HEAD.fastq.gz \
+    --tail results_asv/filtered_reads/sample_filtered_1_TAIL.fastq.gz \
+    --filtered_forward results_asv/filtered_reads/sample_filtered_1.fastq.gz \
+    --filtered_reverse results_asv/filtered_reads/sample_filtered_2.fastq.gz \
+    --reference /path/to/reference.gbk \
+    --cutoff 6 \
+    --min-mapq 30 \
+    --flank-len 300 \
+    --output_dir results_targeted_mapping
+  ```
+
+Outputs are sorted genome-wide and split into:
+- `{sample}_table.tsv`: Main high-confidence insertion table (Known Pairs, Novel Pairs, and resolved Tandems) with complete flanking gene annotation details and median/IQR depth statistics.
+- `{sample}_unpaired.tsv`: Unpaired singleton and off-target noise table with gene annotations omitted.
+
+For details on the algorithm, see [Targeted_Mapping.md](docs/Targeted_Mapping.md).
+
 ## Running Tests
 Run unit tests to verify package integrity:
 ```bash

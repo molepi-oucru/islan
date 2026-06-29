@@ -49,34 +49,31 @@ def load_ids(file_path):
 def extract_pairs(id_or_fastq_path, reverse_fastq_raw, output_reverse_fastq):
     """
     Extracts reads from reverse_fastq_raw that have an ID present in id_or_fastq_path.
+    Uses pyfastx for ultra-fast extraction.
     """
-    logging.info(f"Extracting valid pairs from {reverse_fastq_raw} based on {id_or_fastq_path}")
+    import pyfastx
+    logging.info(f"Extracting valid pairs from {reverse_fastq_raw} based on {id_or_fastq_path} using pyfastx")
     
     valid_ids = load_ids(id_or_fastq_path)
     logging.info(f"Loaded {len(valid_ids)} unique read IDs.")
     
     extracted = 0
-    total = 0
     try:
-        with gzip.open(reverse_fastq_raw, "rt") as r_in, gzip.open(output_reverse_fastq, "wt") as r_out:
-            while True:
-                header = r_in.readline()
-                if not header: break
-                seq = r_in.readline()
-                spacer = r_in.readline()
-                qual = r_in.readline()
-                
-                total += 1
-                rec_id = header.strip()[1:].split()[0]
-                if rec_id in valid_ids:
-                    r_out.write(f"{header}{seq}{spacer}{qual}")
-                    extracted += 1
-    except FileNotFoundError:
-        logging.error(f"Reverse raw file not found: {reverse_fastq_raw}")
-        sys.exit(1)
+        logging.info(f"Indexing reverse reads: {reverse_fastq_raw}")
+        fq_rev = pyfastx.Fastx(reverse_fastq_raw)
         
-    logging.info(f"Extraction complete: {extracted}/{total} reverse reads kept.")
-    logging.info(f"Output saved to: {output_reverse_fastq}")
+        with gzip.open(output_reverse_fastq, "wt") as r_out:
+            for name, seq, qual in fq_rev:
+                name_base = name.split()[0]
+                if name_base in valid_ids:
+                    r_out.write(f"@{name}\n{seq}\n+\n{qual}\n")
+                    extracted += 1
+                    
+        logging.info(f"Extraction complete: {extracted} reverse reads kept.")
+        logging.info(f"Output saved to: {output_reverse_fastq}")
+    except Exception as e:
+        logging.error(f"Error during extraction: {e}")
+        sys.exit(1)
 
 def main():
     setup_logging()

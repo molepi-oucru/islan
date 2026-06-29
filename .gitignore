@@ -139,5 +139,5 @@ Thumbs.db
 
 # Pipeline Output / Run Results
 results/
-results_asv/
+results_*/
 wgs_ismapper/

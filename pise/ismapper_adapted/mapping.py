@@ -1,0 +1,263 @@
+# Adapted from ISMapper
+# Copyright (c) 2014, Jane Hawkey, Kathryn Holt
+
+import os
+import re
+import shlex
+import logging
+import subprocess
+import gzip
+import pyfastx
+from Bio.Seq import Seq
+
+def check_command(cmd_name):
+    """Check if command exists and return the actual command to use (bwa-mem2 vs bwa)"""
+    import shutil
+    if shutil.which(cmd_name):
+        return cmd_name
+    return None
+
+def run_command(cmd_list, shell=False):
+    """Run a command using subprocess."""
+    cmd_str = " ".join(cmd_list) if not shell else cmd_list
+    logging.debug(f"Running: {cmd_str}")
+    try:
+        if shell:
+            subprocess.run(cmd_list, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        else:
+            subprocess.run(cmd_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Command failed: {cmd_str}")
+        logging.error(f"Error output: {e.stderr.decode('utf-8')}")
+        raise
+
+def bwa_index(fasta):
+    """Build bwa index for the fasta file using bwa-mem2 if available, else bwa."""
+    bwa_cmd = check_command('bwa-mem2') or check_command('bwa')
+    if not bwa_cmd:
+        raise EnvironmentError("Neither bwa-mem2 nor bwa is installed.")
+    
+    # check if index exists
+    if bwa_cmd == 'bwa-mem2':
+        built_index = fasta + '.bwt.2bit.64'
+    else:
+        built_index = fasta + '.bwt'
+        
+    if os.path.exists(built_index):
+        logging.info(f'Index for {fasta} already exists.')
+    else:
+        logging.info(f'Building {bwa_cmd} index for {fasta}...')
+        run_command([bwa_cmd, 'index', fasta])
+    return bwa_cmd
+
+def extract_clipped_reads(sam_file, min_size, max_size, out_left_file, out_right_file):
+    """
+    Parse SAM to find unmapped reads whose mapped mate indicates they flank an IS query.
+    Extract the soft-clipped portions.
+    """
+    with open(sam_file, 'r') as in_file, open(out_left_file, 'w') as out_left, open(out_right_file, 'w') as out_right:
+        logging.info(f"Extracting clipped reads into {out_left_file} and {out_right_file}")
+        for line in in_file:
+            entries = line.split('\t')
+            if re.search('^@[A-Z][A-Z]$', entries[0]): continue
+            
+            sam_flag = int(entries[1])
+            if sam_flag & 4: continue # skip unmapped
+            
+            reverse_complement = sam_flag & 16
+            read_name, cigar = entries[0], entries[5]
+            map_regions = re.findall(r'[0-9]+[MIDNSP=X]', cigar)
+            
+            if not map_regions: continue
+            
+            if map_regions[0][-1] == 'S':
+                num_soft_clipped = int(map_regions[0][:-1])
+                if min_size <= num_soft_clipped <= max_size:
+                    soft_clipped_seq = Seq(entries[9][:num_soft_clipped])
+                    qual_scores = entries[10][:num_soft_clipped]
+                    if reverse_complement:
+                        out_left.write(f"@{read_name}\n{soft_clipped_seq.reverse_complement()}\n+\n{qual_scores[::-1]}\n")
+                    else:
+                        out_left.write(f"@{read_name}\n{soft_clipped_seq}\n+\n{qual_scores}\n")
+                        
+            if map_regions[-1][-1] == 'S':
+                num_soft_clipped = int(map_regions[-1][:-1])
+                if min_size <= num_soft_clipped <= max_size:
+                    soft_clipped_seq = Seq(entries[9][-num_soft_clipped:])
+                    qual_scores = entries[10][-num_soft_clipped:]
+                    if reverse_complement:
+                        out_right.write(f"@{read_name}\n{soft_clipped_seq.reverse_complement()}\n+\n{qual_scores[::-1]}\n")
+                    else:
+                        out_right.write(f"@{read_name}\n{soft_clipped_seq}\n+\n{qual_scores}\n")
+
+def map_to_is_query_wgs(sample_prefix, forward_fastq, reverse_fastq, is_query_fasta, tmp_folder, out_dir, min_clip, max_clip, threads):
+    """
+    WGS Mode: Map full reads to the IS query to extract flanking regions via soft-clipping.
+    """
+    bwa_cmd = bwa_index(is_query_fasta)
+    
+    sam_file = os.path.join(tmp_folder, f"{sample_prefix}_query.sam")
+    left_bam = os.path.join(tmp_folder, f"{sample_prefix}_left.bam")
+    right_bam = os.path.join(tmp_folder, f"{sample_prefix}_right.bam")
+    left_reads = os.path.join(tmp_folder, f"{sample_prefix}_left.fastq")
+    right_reads = os.path.join(tmp_folder, f"{sample_prefix}_right.fastq")
+    left_clipped = os.path.join(tmp_folder, f"{sample_prefix}_left_clipped.fastq")
+    right_clipped = os.path.join(tmp_folder, f"{sample_prefix}_right_clipped.fastq")
+    
+    left_final = os.path.join(tmp_folder, f"{sample_prefix}_left_final.fastq")
+    right_final = os.path.join(tmp_folder, f"{sample_prefix}_right_final.fastq")
+
+    logging.info(f"Mapping reads to IS query {is_query_fasta}")
+    run_command(f"{bwa_cmd} mem -t {threads} {is_query_fasta} {forward_fastq} {reverse_fastq} > {sam_file}", shell=True)
+    
+    # Extract unmapped reads flanking IS
+    # Left flank: read unmapped (4) + mate reverse strand (32) = 36
+    run_command(f"samtools view -Sb -f 36 -o {left_bam} {sam_file}", shell=True)
+    # Right flank: read unmapped (4) + mate NOT reverse strand. Filter out mate unmapped (8) + mate reverse (32) = 40
+    run_command(f"samtools view -Sb -f 4 -F 40 -o {right_bam} {sam_file}", shell=True)
+    
+    run_command(f"bedtools bamtofastq -i {left_bam} -fq {left_reads}", shell=True)
+    run_command(f"bedtools bamtofastq -i {right_bam} -fq {right_reads}", shell=True)
+    
+    extract_clipped_reads(sam_file, min_clip, max_clip, left_clipped, right_clipped)
+    
+    run_command(f"cat {left_clipped} {left_reads} > {left_final}", shell=True)
+    run_command(f"cat {right_clipped} {right_reads} > {right_final}", shell=True)
+    
+    return left_final, right_final
+
+def get_ids_and_primer_len(fastq_file):
+    """Extract IDs and the primer length from a HEAD or TAIL file."""
+    ids = []
+    primer_len = 0
+    if not os.path.exists(fastq_file):
+        return ids, primer_len
+        
+    try:
+        with gzip.open(fastq_file, 'rt') as f:
+            for i, line in enumerate(f):
+                if i % 4 == 0:
+                    rec_id = line.strip()[1:].split()[0]
+                    ids.append(rec_id)
+                elif i % 4 == 1 and primer_len == 0:
+                    primer_len = len(line.strip())
+    except EOFError:
+        pass
+    return ids, primer_len
+
+def extract_targeted_flanks_pyfastx(filtered_1_fastq, filtered_2_fastq, head_fastq, tail_fastq, tmp_folder, sample_prefix):
+    """
+    Targeted Mode: Use pyfastx to rapidly extract flanks from targeted IS-Seq data.
+    """
+    left_final = os.path.join(tmp_folder, f"{sample_prefix}_left_final.fastq")
+    right_final = os.path.join(tmp_folder, f"{sample_prefix}_right_final.fastq")
+    
+    head_ids, head_primer_len = get_ids_and_primer_len(head_fastq)
+    tail_ids, tail_primer_len = get_ids_and_primer_len(tail_fastq)
+    
+    if not head_ids:
+        logging.warning(f"HEAD file {head_fastq} is empty or missing.")
+    if not tail_ids:
+        logging.warning(f"TAIL file {tail_fastq} is empty or missing.")
+        
+    head_id_set = set(head_ids)
+    tail_id_set = set(tail_ids)
+    
+    logging.info(f"Loaded {len(head_id_set)} HEAD IDs and {len(tail_id_set)} TAIL IDs.")
+    
+    # 1. Build index and extract forward reads (flanks)
+    logging.info(f"Indexing forward reads: {filtered_1_fastq}")
+    fq_fwd = pyfastx.Fastx(filtered_1_fastq)
+    
+    with open(left_final, 'w') as out_left, open(right_final, 'w') as out_right:
+        for name, seq, qual in fq_fwd:
+            name_base = name.split()[0]
+            if name_base in head_id_set:
+                flank_seq = seq[head_primer_len:]
+                flank_qual = qual[head_primer_len:]
+                if len(flank_seq) > 0:
+                    out_left.write(f"@{name}\n{flank_seq}\n+\n{flank_qual}\n")
+            elif name_base in tail_id_set:
+                flank_seq = seq[tail_primer_len:]
+                flank_qual = qual[tail_primer_len:]
+                if len(flank_seq) > 0:
+                    out_right.write(f"@{name}\n{flank_seq}\n+\n{flank_qual}\n")
+                    
+    # 2. Extract matching reverse reads
+    logging.info(f"Indexing reverse reads: {filtered_2_fastq}")
+    fq_rev = pyfastx.Fastx(filtered_2_fastq)
+    
+    left_rev = os.path.join(tmp_folder, f"{sample_prefix}_left_rev.fastq")
+    right_rev = os.path.join(tmp_folder, f"{sample_prefix}_right_rev.fastq")
+    
+    with open(left_rev, 'w') as out_left, open(right_rev, 'w') as out_right:
+        for name, seq, qual in fq_rev:
+            name_base = name.split()[0]
+            if name_base in head_id_set:
+                out_left.write(f"@{name}\n{seq}\n+\n{qual}\n")
+            elif name_base in tail_id_set:
+                out_right.write(f"@{name}\n{seq}\n+\n{qual}\n")
+                
+    # Interleave them for BWA PE mapping if necessary, or just treat as single end. 
+    # ISMapper treats extracted unmapped reads as single end for mapping to ref.
+    # Wait, ISMapper treats the flanking reads as single-end in map_to_ref_seq:
+    # run_command(['bwa', 'mem', '-t', bwa_threads, ref_seq_file, left_flanking, ...])
+    # So we don't necessarily need the reverse reads here unless we map paired.
+    # We will cat them together to mimic ISMapper's behavior, which pools all left reads.
+    
+    # Mimic ISMapper pooling:
+    run_command(f"cat {left_rev} >> {left_final}", shell=True)
+    run_command(f"cat {right_rev} >> {right_final}", shell=True)
+    
+    return left_final, right_final
+
+def map_to_ref_seq(ref_fasta, sample_prefix, left_flanking, right_flanking, tmp_folder, out_folder, threads, min_mapq=30):
+    """
+    Map the extracted HEAD and TAIL reads to the reference genome independently.
+    """
+    bwa_cmd = bwa_index(ref_fasta)
+    ref_base = os.path.basename(ref_fasta).rsplit('.', 1)[0]
+    
+    left_sorted = os.path.join(out_folder, f"{sample_prefix}_left_{ref_base}.sorted.bam")
+    right_sorted = os.path.join(out_folder, f"{sample_prefix}_right_{ref_base}.sorted.bam")
+    
+    logging.info(f"Mapping left flanks to reference and sorting...")
+    run_command(f"{bwa_cmd} mem -t {threads} {ref_fasta} {left_flanking} | samtools view -h | awk '$5 == 0 || $5 >= {min_mapq} || $1 ~ /^@/' | samtools sort -@ {threads} -o {left_sorted}", shell=True)
+    logging.info(f"Mapping right flanks to reference and sorting...")
+    run_command(f"{bwa_cmd} mem -t {threads} {ref_fasta} {right_flanking} | samtools view -h | awk '$5 == 0 || $5 >= {min_mapq} || $1 ~ /^@/' | samtools sort -@ {threads} -o {right_sorted}", shell=True)
+    
+    # Index BAMs
+    run_command(f"samtools index -@ {threads} {left_sorted}", shell=True)
+    run_command(f"samtools index -@ {threads} {right_sorted}", shell=True)
+    
+    return left_sorted, right_sorted
+
+def create_bed_files(left_bam, right_bam, tmp_folder, out_folder, cutoff, merging):
+    """
+    Create Bedtools coverage maps and filter by depth cutoff.
+    """
+    sample_ref = os.path.basename(left_bam).replace(".sorted.bam", "")
+    sample_prefix = sample_ref.split("_left_")[0]
+    ref_base = sample_ref.split("_left_")[1]
+    
+    left_cov = os.path.join(tmp_folder, f"{sample_prefix}_left_{ref_base}_cov.bed")
+    right_cov = os.path.join(tmp_folder, f"{sample_prefix}_right_{ref_base}_cov.bed")
+    
+    left_final_cov = os.path.join(out_folder, f"{sample_prefix}_left_{ref_base}_finalcov.bed")
+    right_final_cov = os.path.join(out_folder, f"{sample_prefix}_right_{ref_base}_finalcov.bed")
+    
+    left_merged_bed = os.path.join(out_folder, f"{sample_prefix}_left_{ref_base}_merged.sorted.bed")
+    right_merged_bed = os.path.join(out_folder, f"{sample_prefix}_right_{ref_base}_merged.sorted.bed")
+    
+    run_command(f"bedtools genomecov -ibam {left_bam} -bg > {left_cov}", shell=True)
+    run_command(f"bedtools genomecov -ibam {right_bam} -bg > {right_cov}", shell=True)
+    
+    # Filter by cutoff using awk
+    run_command(f"awk '$4 >= {cutoff}' {left_cov} > {left_final_cov}", shell=True)
+    run_command(f"awk '$4 >= {cutoff}' {right_cov} > {right_final_cov}", shell=True)
+    
+    # Merge
+    run_command(f"bedtools merge -d {merging} -i {left_final_cov} > {left_merged_bed}", shell=True)
+    run_command(f"bedtools merge -d {merging} -i {right_final_cov} > {right_merged_bed}", shell=True)
+        
+    return left_merged_bed, right_merged_bed

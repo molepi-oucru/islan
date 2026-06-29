@@ -41,6 +41,27 @@ def main():
     pairing_parser.add_argument("-r", "--reverse", required=True, help="Raw reverse FASTQ (.gz)")
     pairing_parser.add_argument("-o", "--output", required=True, help="Output reverse FASTQ (.gz)")
 
+    # Subparser: is-mapping
+    ismapper_parser = subparsers.add_parser("is-mapping", help="Identify IS insertion sites (adapted from ISMapper)")
+    ismapper_parser.add_argument("--reads", nargs='+', help="Input reads (WGS mode)")
+    ismapper_parser.add_argument("--queries", help="IS query FASTA (WGS mode)")
+    ismapper_parser.add_argument("--reference", required=True, help="Reference genome FASTA/GenBank")
+    ismapper_parser.add_argument("--targeted", action="store_true", help="Run in targeted mode (bypasses query mapping)")
+    ismapper_parser.add_argument("--head", help="HEAD primer extracted reads (Targeted mode)")
+    ismapper_parser.add_argument("--tail", help="TAIL primer extracted reads (Targeted mode)")
+    ismapper_parser.add_argument("--filtered_forward", help="Filtered forward reads _1.fastq.gz (Targeted mode)")
+    ismapper_parser.add_argument("--filtered_reverse", help="Filtered reverse reads _2.fastq.gz (Targeted mode)")
+    ismapper_parser.add_argument("-o", "--output_dir", default="results_ismapper", help="Output directory")
+    ismapper_parser.add_argument("-t", "--threads", type=int, default=1, help="Number of threads")
+    ismapper_parser.add_argument("--min_clip", type=int, default=10, help="Minimum soft-clip size (WGS)")
+    ismapper_parser.add_argument("--max_clip", type=int, default=30, help="Maximum soft-clip size (WGS)")
+    ismapper_parser.add_argument("--cutoff", type=int, default=6, help="Minimum depth cutoff for reporting")
+    ismapper_parser.add_argument("--merging", type=int, default=100, help="Merge distance for bedtools")
+    ismapper_parser.add_argument("--is_length", type=int, default=4000, help="Max gap distance to pair endogenous IS flanks (default 4000)")
+    ismapper_parser.add_argument("--min-mapq", "--min_mapq", dest="min_mapq", type=int, default=30, help="Minimum mapping quality to filter reads (retains MAPQ == 0 multi-mappers; discards 0 < MAPQ < min_mapq)")
+    ismapper_parser.add_argument("--flank-len", "--flank_len", dest="flank_len", type=int, default=300, help="Flanking window around known IS element boundaries (default 300 bp)")
+    ismapper_parser.add_argument("--temp", action="store_true", help="Keep the temporary files directory after successful completion (default: remove)")
+
     args = parser.parse_args()
 
     if args.subcommand == "asv-analysis":
@@ -65,6 +86,11 @@ def main():
             min_len=args.min_len,
             output_dir=args.output_dir
         )
+        sys.exit(0)
+
+    if args.subcommand == "is-mapping":
+        from pise.ismapper_adapted.main import run_is_mapping
+        run_is_mapping(args)
         sys.exit(0)
 
 if __name__ == "__main__":

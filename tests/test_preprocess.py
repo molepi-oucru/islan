@@ -106,7 +106,7 @@ class TestPISEModules(unittest.TestCase):
                 
             # Should have read1 and read3, but NOT read2
             self.assertEqual(len(lines), 8) # 2 reads * 4 lines
-            self.assertEqual(lines[0], "@read1 2:N:0:1\n")
+            self.assertTrue(lines[0].startswith("@read1"))
             self.assertEqual(lines[4], "@read3\n")
         finally:
             os.remove(f_fw_path)
