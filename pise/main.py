@@ -51,6 +51,7 @@ def main():
     ismapper_parser.add_argument("--tail", help="TAIL primer extracted reads (Targeted mode)")
     ismapper_parser.add_argument("--filtered_forward", help="Filtered forward reads _1.fastq.gz (Targeted mode)")
     ismapper_parser.add_argument("--filtered_reverse", help="Filtered reverse reads _2.fastq.gz (Targeted mode)")
+    ismapper_parser.add_argument("--forward-only", "--forward_only", dest="forward_only", action="store_true", help="Run analysis with forward reads only (single-end)")
     ismapper_parser.add_argument("-o", "--output_dir", default="results_ismapper", help="Output directory")
     ismapper_parser.add_argument("-t", "--threads", type=int, default=1, help="Number of threads")
     ismapper_parser.add_argument("--min_clip", type=int, default=10, help="Minimum soft-clip size (WGS)")

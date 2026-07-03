@@ -108,7 +108,10 @@ def map_to_is_query_wgs(sample_prefix, forward_fastq, reverse_fastq, is_query_fa
     right_final = os.path.join(tmp_folder, f"{sample_prefix}_right_final.fastq")
 
     logging.info(f"Mapping reads to IS query {is_query_fasta}")
-    run_command(f"{bwa_cmd} mem -t {threads} {is_query_fasta} {forward_fastq} {reverse_fastq} > {sam_file}", shell=True)
+    if reverse_fastq:
+        run_command(f"{bwa_cmd} mem -t {threads} {is_query_fasta} {forward_fastq} {reverse_fastq} > {sam_file}", shell=True)
+    else:
+        run_command(f"{bwa_cmd} mem -t {threads} {is_query_fasta} {forward_fastq} > {sam_file}", shell=True)
     
     # Extract unmapped reads flanking IS
     # Left flank: read unmapped (4) + mate reverse strand (32) = 36
@@ -145,7 +148,7 @@ def get_ids_and_primer_len(fastq_file):
         pass
     return ids, primer_len
 
-def extract_targeted_flanks_pyfastx(filtered_1_fastq, filtered_2_fastq, head_fastq, tail_fastq, tmp_folder, sample_prefix):
+def extract_targeted_flanks_pyfastx(filtered_1_fastq, filtered_2_fastq, head_fastq, tail_fastq, tmp_folder, sample_prefix, forward_only=False):
     """
     Targeted Mode: Use pyfastx to rapidly extract flanks from targeted IS-Seq data.
     """
@@ -183,31 +186,32 @@ def extract_targeted_flanks_pyfastx(filtered_1_fastq, filtered_2_fastq, head_fas
                 if len(flank_seq) > 0:
                     out_right.write(f"@{name}\n{flank_seq}\n+\n{flank_qual}\n")
                     
-    # 2. Extract matching reverse reads
-    logging.info(f"Indexing reverse reads: {filtered_2_fastq}")
-    fq_rev = pyfastx.Fastx(filtered_2_fastq)
-    
-    left_rev = os.path.join(tmp_folder, f"{sample_prefix}_left_rev.fastq")
-    right_rev = os.path.join(tmp_folder, f"{sample_prefix}_right_rev.fastq")
-    
-    with open(left_rev, 'w') as out_left, open(right_rev, 'w') as out_right:
-        for name, seq, qual in fq_rev:
-            name_base = name.split()[0]
-            if name_base in head_id_set:
-                out_left.write(f"@{name}\n{seq}\n+\n{qual}\n")
-            elif name_base in tail_id_set:
-                out_right.write(f"@{name}\n{seq}\n+\n{qual}\n")
-                
-    # Interleave them for BWA PE mapping if necessary, or just treat as single end. 
-    # ISMapper treats extracted unmapped reads as single end for mapping to ref.
-    # Wait, ISMapper treats the flanking reads as single-end in map_to_ref_seq:
-    # run_command(['bwa', 'mem', '-t', bwa_threads, ref_seq_file, left_flanking, ...])
-    # So we don't necessarily need the reverse reads here unless we map paired.
-    # We will cat them together to mimic ISMapper's behavior, which pools all left reads.
-    
-    # Mimic ISMapper pooling:
-    run_command(f"cat {left_rev} >> {left_final}", shell=True)
-    run_command(f"cat {right_rev} >> {right_final}", shell=True)
+    if not forward_only:
+        # 2. Extract matching reverse reads
+        logging.info(f"Indexing reverse reads: {filtered_2_fastq}")
+        fq_rev = pyfastx.Fastx(filtered_2_fastq)
+        
+        left_rev = os.path.join(tmp_folder, f"{sample_prefix}_left_rev.fastq")
+        right_rev = os.path.join(tmp_folder, f"{sample_prefix}_right_rev.fastq")
+        
+        with open(left_rev, 'w') as out_left, open(right_rev, 'w') as out_right:
+            for name, seq, qual in fq_rev:
+                name_base = name.split()[0]
+                if name_base in head_id_set:
+                    out_left.write(f"@{name}\n{seq}\n+\n{qual}\n")
+                elif name_base in tail_id_set:
+                    out_right.write(f"@{name}\n{seq}\n+\n{qual}\n")
+                    
+        # Interleave them for BWA PE mapping if necessary, or just treat as single end. 
+        # ISMapper treats extracted unmapped reads as single end for mapping to ref.
+        # Wait, ISMapper treats the flanking reads as single-end in map_to_ref_seq:
+        # run_command(['bwa', 'mem', '-t', bwa_threads, ref_seq_file, left_flanking, ...])
+        # So we don't necessarily need the reverse reads here unless we map paired.
+        # We will cat them together to mimic ISMapper's behavior, which pools all left reads.
+        
+        # Mimic ISMapper pooling:
+        run_command(f"cat {left_rev} >> {left_final}", shell=True)
+        run_command(f"cat {right_rev} >> {right_final}", shell=True)
     
     return left_final, right_final
 

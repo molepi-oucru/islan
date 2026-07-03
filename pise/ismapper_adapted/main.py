@@ -30,9 +30,14 @@ def run_is_mapping(args):
     
     if args.targeted:
         logging.info("Running in TARGETED mode...")
-        if not args.head or not args.tail or not args.filtered_forward or not args.filtered_reverse:
-            logging.error("Targeted mode requires --head, --tail, --filtered_forward, and --filtered_reverse")
-            sys.exit(1)
+        if args.forward_only:
+            if not args.head or not args.tail or not args.filtered_forward:
+                logging.error("Targeted forward-only mode requires --head, --tail, and --filtered_forward")
+                sys.exit(1)
+        else:
+            if not args.head or not args.tail or not args.filtered_forward or not args.filtered_reverse:
+                logging.error("Targeted mode requires --head, --tail, --filtered_forward, and --filtered_reverse")
+                sys.exit(1)
             
         sample_prefix = os.path.basename(args.head).split("_")[0] if args.head else "sample"
         left_flanking, right_flanking = extract_targeted_flanks_pyfastx(
@@ -41,13 +46,17 @@ def run_is_mapping(args):
             head_fastq=args.head,
             tail_fastq=args.tail,
             tmp_folder=tmp_dir,
-            sample_prefix=sample_prefix
+            sample_prefix=sample_prefix,
+            forward_only=args.forward_only
         )
     else:
         logging.info("Running in WGS mode...")
         # Assume reads are provided as two paired files for simplicity, or we can use the first two elements.
         forward_read = args.reads[0]
-        reverse_read = args.reads[1] if len(args.reads) > 1 else args.reads[0] # Handle paired or single
+        if args.forward_only or len(args.reads) == 1:
+            reverse_read = None
+        else:
+            reverse_read = args.reads[1]
         sample_prefix = os.path.basename(forward_read).split("_")[0]
         left_flanking, right_flanking = map_to_is_query_wgs(
             sample_prefix=sample_prefix,
@@ -108,6 +117,8 @@ def run_is_mapping(args):
         right_cov=os.path.join(tmp_dir, f"{sample_prefix}_right_{ref_base}_cov.bed"),
         ref_fasta=args.reference,
         out_file=out_table,
+        left_bam=left_bam,
+        right_bam=right_bam,
         is_length=args.is_length,
         flank_len=args.flank_len,
         targets_fasta=targets_fasta,
@@ -116,7 +127,7 @@ def run_is_mapping(args):
     
     # Generate HTML report
     report_file = os.path.join(out_dir, f"{sample_prefix}__{ref_base}_report.html")
-    generate_report(out_table, report_file)
+    generate_report(out_table, report_file, cutoff=args.cutoff)
     
     if not getattr(args, 'temp', False):
         import shutil

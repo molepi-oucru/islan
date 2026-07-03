@@ -22,10 +22,27 @@ uv run pise is-mapping --targeted \
   --threads 8
 ```
 
+Alternatively, to run the pipeline with forward reads only (single-end analysis), add the `--forward-only` flag (in this mode, `--filtered_reverse` is not required):
+
+```bash
+uv run pise is-mapping --targeted \
+  --head results_asv/filtered_reads/sample_1_HEAD.fastq.gz \
+  --tail results_asv/filtered_reads/sample_1_TAIL.fastq.gz \
+  --filtered_forward results_asv/filtered_reads/sample_filtered_1.fastq.gz \
+  --forward-only \
+  --reference references/genome.gb \
+  --output_dir results_targeted_forward_only \
+  --cutoff 6 \
+  --min-mapq 30 \
+  --flank-len 300 \
+  --threads 8
+```
+
 ### Key CLI Parameters
 *   `--targeted`: Activates targeted amplicon parsing mode, bypassing the standard WGS soft-clip parsing heuristics.
 *   `--head` / `--tail`: Trimmed primer-specific read FASTQ files generated during `pise pre-process`.
 *   `--filtered_forward` / `--filtered_reverse`: Trimmed paired-end reads (essential to prevent i5 indexes or adapters from affecting the soft-clipping and mapping coordinates).
+*   `--forward-only`: Runs the mapping and analysis with forward reads (Read 1) only (single-end). In targeted mode, this ignores/skips reverse reads and doesn't require `--filtered_reverse`. In WGS mode, this configures single-end BWA mapping.
 *   `--cutoff`: Minimum read depth cutoff at each base position to consider it as part of a called flanking peak (default 6).
 *   `--min-mapq`: Minimum mapping quality filter (default 30). This retains perfect multi-mappers (`MAPQ == 0`) and filters out weak cross-hybridizations (`0 < MAPQ < 30`).
 *   `--flank-len`: Search window size around known reference copies (default 300 bp).

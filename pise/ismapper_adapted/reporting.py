@@ -712,6 +712,8 @@ def parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_
         
         final_hits.append({
             'type': h['type'],
+            'l_peak': lp,
+            'r_peak': rp,
             'contig': contig,
             'orientation': ismap_orientation,
             'x': x_val,
@@ -747,7 +749,81 @@ def parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_
     final_hits.sort(key=get_sort_key)
     return final_hits
 
-def create_typing_output(left_merged, right_merged, left_cov, right_cov, ref_fasta, out_file, is_length=4000, flank_len=300, targets_fasta="config/targets.fasta", threads=1):
+def get_read_count(bam_path, chrom, start, end):
+    if not bam_path or not os.path.exists(bam_path):
+        return "N/A"
+    import subprocess
+    region = f"{chrom}:{start}-{end}"
+    cmd = ["samtools", "view", "-c", bam_path, region]
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return int(res.stdout.strip())
+    except Exception:
+        return 0
+
+def calculate_detailed_stats(cov_data, chrom, start, end, bam_path):
+    depths = []
+    if chrom not in cov_data:
+        depths = [0.0] * (end - start)
+    else:
+        for c_start, c_end, c_depth in cov_data[chrom]:
+            if c_start >= end:
+                break
+            if c_end <= start:
+                continue
+            overlap_start = max(start, c_start)
+            overlap_end = min(end, c_end)
+            if overlap_start < overlap_end:
+                depths.extend([c_depth] * (overlap_end - overlap_start))
+        expected_length = end - start
+        actual_length = len(depths)
+        if actual_length < expected_length:
+            depths.extend([0.0] * (expected_length - actual_length))
+            
+    n = len(depths)
+    mean_val = sum(depths) / n if n > 0 else 0.0
+    variance = sum((x - mean_val) ** 2 for x in depths) / n if n > 0 else 0.0
+    std_val = variance ** 0.5
+    
+    sorted_depths = sorted(depths)
+    
+    def get_val(p):
+        if not sorted_depths: return 0.0
+        idx = (n - 1) * p
+        idx_f = int(idx)
+        idx_c = idx_f + 1 if idx_f + 1 < n else idx_f
+        weight = idx - idx_f
+        return sorted_depths[idx_f] * (1.0 - weight) + sorted_depths[idx_c] * weight
+        
+    min_val = sorted_depths[0] if sorted_depths else 0.0
+    max_val = sorted_depths[-1] if sorted_depths else 0.0
+    p10_val = get_val(0.10)
+    p25_val = get_val(0.25)
+    median_val = get_val(0.50)
+    p75_val = get_val(0.75)
+    p90_val = get_val(0.90)
+    
+    zero_count = sum(1 for x in depths if x == 0.0)
+    zero_pct = (zero_count / n * 100.0) if n > 0 else 0.0
+    
+    read_count = get_read_count(bam_path, chrom, start, end)
+    
+    return {
+        'length': n,
+        'mean': round(mean_val, 2),
+        'std': round(std_val, 2),
+        'min': round(min_val, 2),
+        'p10': round(p10_val, 2),
+        'p25': round(p25_val, 2),
+        'median': round(median_val, 2),
+        'p75': round(p75_val, 2),
+        'p90': round(p90_val, 2),
+        'max': round(max_val, 2),
+        'zero_pct': round(zero_pct, 2),
+        'read_count': read_count
+    }
+
+def create_typing_output(left_merged, right_merged, left_cov, right_cov, ref_fasta, out_file, left_bam=None, right_bam=None, is_length=4000, flank_len=300, targets_fasta="config/targets.fasta", threads=1):
     """
     Generate final summary table.
     """
@@ -799,6 +875,59 @@ def create_typing_output(left_merged, right_merged, left_cov, right_cov, ref_fas
             writer.writerow(row)
             
     logging.info(f"Report successfully written to {out_file}.")
+    
+    # Write raw base-by-base coverage depth distributions table to depths.tsv
+    left_cov_data = parse_coverage(left_cov)
+    right_cov_data = parse_coverage(right_cov)
+    out_depths = out_file.replace('_table.tsv', '_depths.tsv')
+    depths_fieldnames = [
+        'region', 'type', 'orient', 'side', 'length', 'read_count',
+        'mean', 'std', 'min', 'p10', 'p25', 'median', 'p75', 'p90', 'max', 
+        'zero_pct'
+    ]
+    with open(out_depths, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=depths_fieldnames, delimiter='\t')
+        writer.writeheader()
+        for hit in main_hits:
+            orient = hit.get('orientation', 'F')
+            lp = hit.get('l_peak')
+            rp = hit.get('r_peak')
+            if not lp or not rp:
+                continue
+                
+            if lp['start'] < rp['start']:
+                left_peak, right_peak = lp, rp
+            else:
+                left_peak, right_peak = rp, lp
+                
+            if orient == 'F':
+                left_stats = calculate_detailed_stats(left_cov_data, left_peak['chr'], left_peak['start'], left_peak['end'], left_bam)
+                right_stats = calculate_detailed_stats(right_cov_data, right_peak['chr'], right_peak['start'], right_peak['end'], right_bam)
+            else:
+                left_stats = calculate_detailed_stats(right_cov_data, left_peak['chr'], left_peak['start'], left_peak['end'], right_bam)
+                right_stats = calculate_detailed_stats(left_cov_data, right_peak['chr'], right_peak['start'], right_peak['end'], left_bam)
+                
+            # Write Left Flank
+            left_row = {
+                'region': hit['region'],
+                'type': hit['type'],
+                'orient': orient,
+                'side': 'left',
+                **left_stats
+            }
+            writer.writerow(left_row)
+            
+            # Write Right Flank
+            right_row = {
+                'region': hit['region'],
+                'type': hit['type'],
+                'orient': orient,
+                'side': 'right',
+                **right_stats
+            }
+            writer.writerow(right_row)
+            
+    logging.info(f"Flanking depth statistics written to {out_depths}.")
     
     # Write unpaired/noise hits to unpaired.tsv (omit left_gene & right_gene information)
     unpaired_fieldnames = [
