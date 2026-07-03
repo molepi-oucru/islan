@@ -31,41 +31,45 @@ PISE/
 
 ## Setup & Installation
 
-### Option A: Using `uv` (Recommended - Blazingly Fast)
-`uv` is an extremely fast Python package manager that handles virtual environment creation and package installation automatically.
+### Option A: Using Conda & Mamba (Recommended - Fully Isolated)
+This is the most convenient way to set up the pipeline, as it installs the Python environment, all Python libraries, and all compiled bioinformatic binary dependencies (`bwa`, `bwa-mem2`, `samtools`, `bedtools`, `blastn`, and `minimap2`) in a single command.
 
-1. **Global Installation (Run from anywhere)**:
-   You can install the pipeline as a global CLI tool using `uv`. This automatically places the `pise` executable on your system's `PATH`:
+1. **Create and Activate Environment**:
+   Run the following from the root of the repository to create the environment and register the `pise` tool in editable mode:
    ```bash
-   uv tool install --editable /path/to/PISE/
+   mamba env create -f environment.yaml
+   conda activate pise_env
    ```
-   Once installed, you can call `pise` directly from any directory in your terminal!
 
-2. **Alternative: Local Project Environment**:
-   Initialize a local virtual environment `.venv/` and install dependencies in editable mode:
+2. **Verify Installation**:
+   Verify that `pise` and all dependencies are correctly registered:
    ```bash
-   uv sync --python 3.8
+   pise --help
+   samtools --version
+   blastn -version
+   minimap2 --version
    ```
-   Then, prepend commands with `uv run` to execute them:
+
+### Option B: Using `uv` (Fast Python Setup)
+If you already have the required command-line dependencies (`bwa`, `bwa-mem2`, `samtools`, `bedtools`, `blastn`, and `minimap2`) installed on your system `PATH`, you can use `uv` for a fast Python environment setup.
+
+1. **Global Installation**:
+   Install the pipeline globally as an editable tool using `uv`:
+   ```bash
+   uv tool install --editable .
+   ```
+   This registers the `pise` command directly in your user path.
+
+2. **Local Project Environment**:
+   Initialize a local virtual environment `.venv/` and sync dependencies:
+   ```bash
+   uv sync
+   ```
+   Then run commands prepended with `uv run`:
    ```bash
    uv run pise ...
    ```
 
-### Option B: Using Conda & Pip (Legacy)
-
-1. **Environment Setup**:
-   Create and activate your Python/Conda environment (requires Python >= 3.8 and Biopython):
-   ```bash
-   conda env create -f environment.yaml
-   conda activate py38_isseq
-   ```
-
-2. **Package Installation**:
-   Install the package in editable mode from the repository root:
-   ```bash
-   pip install -e .
-   ```
-This registers the CLI command `pise` directly in your environment.
 
 ## Running the Pipeline
 

@@ -1,12 +1,22 @@
-name: py38_isseq
+name: pise_env
 channels:
   - conda-forge
   - bioconda
   - defaults
 dependencies:
-  - python=3.8
-  - biopython=1.81
+  - python>=3.10
+  - biopython>=1.81
+  - pandas
+  - plotly
+  - pyfastx>=2.3.1
+  - pytest
   - pyyaml
+  - bwa>=0.7.17
+  - bwa-mem2>=2.2.1
+  - samtools>=1.18
+  - bedtools>=2.31
+  - blast>=2.9.0
+  - minimap2>=2.26
   - pip
-    - pip:
-      - plotly
+  - pip:
+    - -e .
