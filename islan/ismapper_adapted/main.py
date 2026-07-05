@@ -14,7 +14,7 @@ def run_is_mapping(args):
     os.makedirs(tmp_dir, exist_ok=True)
     
     # Configure file logging
-    log_file = os.path.join(out_dir, "pise_is_mapping.log")
+    log_file = os.path.join(out_dir, "islan_is_mapping.log")
     root_logger = logging.getLogger()
     for handler in list(root_logger.handlers):
         if isinstance(handler, logging.FileHandler):

@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pise"
+name = "islan"
 version = "1.1.0"
-description = "Pipeline for IS-Seq sequencing data analysis"
+description = "Insertion Sequence Landscape Analyzer (ISLAN) - Pipeline for IS-Seq sequencing data analysis"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
@@ -17,5 +17,5 @@ dependencies = [
 ]
 
 [project.scripts]
-pise = "pise.main:main"
-pise-preprocess = "pise.filter_reads:main"
+islan = "islan.main:main"
+islan-preprocess = "islan.filter_reads:main"

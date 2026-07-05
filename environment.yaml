@@ -1,4 +1,4 @@
-name: pise_env
+name: islan_env
 channels:
   - conda-forge
   - bioconda

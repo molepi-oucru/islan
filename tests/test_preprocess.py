@@ -7,40 +7,40 @@ import gzip
 # Add root directory to path to allow import
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-class TestPISEModules(unittest.TestCase):
+class TestISLANModules(unittest.TestCase):
     def test_filter_reads_imports(self):
         try:
-            from pise import filter_reads
+            from islan import filter_reads
             self.assertTrue(hasattr(filter_reads, 'load_primers'))
             self.assertTrue(hasattr(filter_reads, 'process_forward_reads'))
             self.assertTrue(hasattr(filter_reads, 'process_batch_worker'))
         except ImportError as e:
-            self.fail(f"Could not import pise.filter_reads: {e}")
+            self.fail(f"Could not import islan.filter_reads: {e}")
 
     def test_qc_imports(self):
         try:
-            from pise import qc
+            from islan import qc
             self.assertTrue(hasattr(qc, 'run_qc'))
             self.assertTrue(hasattr(qc, 'load_known_indices'))
             self.assertTrue(hasattr(qc, 'get_or_create_handle'))
         except ImportError as e:
-            self.fail(f"Could not import pise.qc: {e}")
+            self.fail(f"Could not import islan.qc: {e}")
 
     def test_extract_pairs_imports(self):
         try:
-            from pise import extract_pairs
+            from islan import extract_pairs
             self.assertTrue(hasattr(extract_pairs, 'extract_pairs'))
         except ImportError as e:
-            self.fail(f"Could not import pise.extract_pairs: {e}")
+            self.fail(f"Could not import islan.extract_pairs: {e}")
 
     def test_hamming_distance(self):
-        from pise.qc import hamming_distance
+        from islan.qc import hamming_distance
         self.assertEqual(hamming_distance("CTCTCTAT", "CTCTCTAT"), 0)
         self.assertEqual(hamming_distance("CTCTCTAT", "CTCTCTAA"), 1)
         self.assertEqual(hamming_distance("CTCTCTAT", "TATCCTCT"), 5)
 
     def test_load_ids_txt_vs_fastq(self):
-        from pise.extract_pairs import load_ids
+        from islan.extract_pairs import load_ids
         
         # Test 1: Plain text file
         with tempfile.NamedTemporaryFile(mode='w', delete=False) as f_txt:
@@ -68,13 +68,13 @@ class TestPISEModules(unittest.TestCase):
 
     def test_run_preprocess_import(self):
         try:
-            from pise.preprocess import run_preprocess
+            from islan.preprocess import run_preprocess
             self.assertTrue(callable(run_preprocess))
         except ImportError as e:
-            self.fail(f"Could not import run_preprocess from pise.preprocess: {e}")
+            self.fail(f"Could not import run_preprocess from islan.preprocess: {e}")
 
     def test_extract_pairs_logic(self):
-        from pise.extract_pairs import extract_pairs
+        from islan.extract_pairs import extract_pairs
         
         # Create temp files
         with tempfile.NamedTemporaryFile(suffix='.fastq.gz', delete=False) as f_fw, \

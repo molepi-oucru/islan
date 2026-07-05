@@ -3,7 +3,7 @@ import sys
 import logging
 import concurrent.futures
 from Bio import SeqIO
-from pise import filter_reads
+from islan import filter_reads
 
 INDEX_LEN = 8
 
@@ -108,7 +108,7 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
     os.makedirs(final_output_dir, exist_ok=True)
     
     # Configure logging
-    log_file = os.path.join(final_output_dir, "pise.log")
+    log_file = os.path.join(final_output_dir, "islan.log")
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s [%(levelname)s] %(message)s',
@@ -178,7 +178,7 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
             'expected_category': chosen_cat
         }]
 
-    logging.info("Initializing IS-Seq Analysis Pipeline (pise) pre-process...")
+    logging.info("Initializing IS-Seq Analysis Pipeline (islan) pre-process...")
     preprocess_output_dir = os.path.join(final_output_dir, "filtered_reads")
     os.makedirs(preprocess_output_dir, exist_ok=True)
     qc_output_dir = os.path.join(final_output_dir, "demux_reads")
@@ -189,7 +189,7 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
     # PHASE 1: Parallel QC
     if run_qc_step:
         logging.info(f"--- PHASE 1: Parallel QC (Max Threads: {threads_val}) ---")
-        from pise.qc import run_qc
+        from islan.qc import run_qc
         
         futures = {}
         with concurrent.futures.ProcessPoolExecutor(max_workers=threads_val) as executor:
@@ -308,7 +308,7 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
             else:
                 logging.warning(f"Demultiplexed file for {expected_cat} not found at {expected_demux_file}. Using raw forward reads.")
         else:
-            from pise.qc import load_known_indices
+            from islan.qc import load_known_indices
             known_indices = load_known_indices(primers_file)
             expected_index_seq = known_indices.get(cur_target, None)
 
@@ -334,9 +334,9 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
         }
         all_runs_stats.append(run_stats)
 
-    pise_summary_path = os.path.join(final_output_dir, "pise_summary.tsv")
+    islan_summary_path = os.path.join(final_output_dir, "islan_summary.tsv")
     try:
-        with open(pise_summary_path, 'w') as f:
+        with open(islan_summary_path, 'w') as f:
             if all_runs_stats:
                 headers = [
                     'Sample_Index', 'IS_element',
@@ -347,7 +347,7 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
                 f.write("\t".join(headers) + "\n")
                 for stats in all_runs_stats:
                     f.write("\t".join([str(stats.get(h, '')) for h in headers]) + "\n")
-        logging.info(f"Summary statistics saved to TSV: {pise_summary_path}")
+        logging.info(f"Summary statistics saved to TSV: {islan_summary_path}")
     except Exception as e:
         logging.error(f"Failed to write summary statistics TSV: {e}")
         sys.exit(1)

@@ -1,6 +1,6 @@
 # Targeted IS-Seq Mapping Guide
 
-This document describes the design, algorithms, parameter tuning, output formats, and mathematical logic behind the `pise is-mapping --targeted` pipeline.
+This document describes the design, algorithms, parameter tuning, output formats, and mathematical logic behind the `islan is-mapping --targeted` pipeline.
 
 ---
 
@@ -9,7 +9,7 @@ This document describes the design, algorithms, parameter tuning, output formats
 To run the pipeline in targeted mode, supply the filtered forward reads, filtered reverse reads (ensuring adapters and index offsets are removed), and the extracted `HEAD`/`TAIL` read subsets:
 
 ```bash
-uv run pise is-mapping --targeted \
+uv run islan is-mapping --targeted \
   --head results_asv/filtered_reads/sample_1_HEAD.fastq.gz \
   --tail results_asv/filtered_reads/sample_1_TAIL.fastq.gz \
   --filtered_forward results_asv/filtered_reads/sample_filtered_1.fastq.gz \
@@ -25,7 +25,7 @@ uv run pise is-mapping --targeted \
 Alternatively, to run the pipeline with forward reads only (single-end analysis), add the `--forward-only` flag (in this mode, `--filtered_reverse` is not required):
 
 ```bash
-uv run pise is-mapping --targeted \
+uv run islan is-mapping --targeted \
   --head results_asv/filtered_reads/sample_1_HEAD.fastq.gz \
   --tail results_asv/filtered_reads/sample_1_TAIL.fastq.gz \
   --filtered_forward results_asv/filtered_reads/sample_filtered_1.fastq.gz \
@@ -40,7 +40,7 @@ uv run pise is-mapping --targeted \
 
 ### Key CLI Parameters
 *   `--targeted`: Activates targeted amplicon parsing mode, bypassing the standard WGS soft-clip parsing heuristics.
-*   `--head` / `--tail`: Trimmed primer-specific read FASTQ files generated during `pise pre-process`.
+*   `--head` / `--tail`: Trimmed primer-specific read FASTQ files generated during `islan pre-process`.
 *   `--filtered_forward` / `--filtered_reverse`: Trimmed paired-end reads (essential to prevent i5 indexes or adapters from affecting the soft-clipping and mapping coordinates).
 *   `--forward-only`: Runs the mapping and analysis with forward reads (Read 1) only (single-end). In targeted mode, this ignores/skips reverse reads and doesn't require `--filtered_reverse`. In WGS mode, this configures single-end BWA mapping.
 *   `--cutoff`: Minimum read depth cutoff at each base position to consider it as part of a called flanking peak (default 6).
@@ -51,7 +51,7 @@ uv run pise is-mapping --targeted \
 
 ## 2. Why WGS Mode Should Not Be Used for Targeted IS-Seq
 
-You must always run `pise is-mapping` with the `--targeted` flag when analyzing IS-Seq data. Running standard WGS mode (the original ISMapper algorithm) on targeted amplicon reads breaks down because of the difference in read structures.
+You must always run `islan is-mapping` with the `--targeted` flag when analyzing IS-Seq data. Running standard WGS mode (the original ISMapper algorithm) on targeted amplicon reads breaks down because of the difference in read structures.
 
 ### WGS shotgun vs. Amplicon Data Structure
 - **WGS Shotgun Data**: DNA is fragmented randomly. Read pairs spanning an IS boundary consist of one read mapping entirely to the genomic sequence, and its mate spanning the boundary (partially mapping to the IS, and partially to the genome).
@@ -68,7 +68,7 @@ The WGS algorithm (ISMapper) sorts shotgun reads into "Left Flank" and "Right Fl
 
 ## 3. How Insertion Sites Are Detected
 
-PISE resolves insertions using a **three-stage coordinate pairing logic** designed to identify known copies, characterize novel and tandem insertions, and isolate noise. 
+ISLAN resolves insertions using a **three-stage coordinate pairing logic** designed to identify known copies, characterize novel and tandem insertions, and isolate noise. 
 
 ### 3.1 Reference Mapping and Quality Filtering (MAPQ)
 Before the pairing logic is executed, extracted flanking reads are aligned back to the reference sequence:
@@ -98,7 +98,7 @@ Bacteria often harbor plasmids in addition to the primary chromosome.
    - To overcome this, a combined reference file (in a multi-fasta or multi-genbank file) containing both the chromosome and all plasmids can be used.
 2. **Simultaneous Mapping (Parallel Competition)**:
    - When a combined reference containing both the chromosome and plasmids is provided, mapping is performed **simultaneously** rather than sequentially.
-   - PISE parses all records from the input file, merges them into a single temporary reference FASTA, and builds a single combined BWA index.
+   - ISLAN parses all records from the input file, merges them into a single temporary reference FASTA, and builds a single combined BWA index.
    - During `bwa mem` execution, all reads are aligned against this combined index in a single run. This allows reads to compete across all replicons (chromosome and plasmids) at the same time. This is critical for evaluating correct mapping quality (MAPQ) and identifying true multi-mappers vs. unique plasmid/chromosomal insertions.
 3. **Ambiguous Insertions (Similar/Duplicated Regions)**:
    - When identical sequence segments or homologous genes are present on both the chromosome and a plasmid, or duplicated on the chromosome:
@@ -168,7 +168,7 @@ Based on outward-facing primers, the orientation of a paired insertion is deduce
 
 ## 5. Output Data Format & Interpretation
 
-PISE outputs two main TSV files:
+ISLAN outputs two main TSV files:
 1. **`{sample}_table.tsv`**: Paired insertions (Known, Novel, and resolved Tandems) with flanking gene annotations.
 2. **`{sample}_unpaired.tsv`**: Unpaired singletons and off-target noise (with gene annotations omitted).
 

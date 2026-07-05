@@ -16,7 +16,7 @@ def main():
         datefmt='%Y-%m-%d %H:%M:%S'
     )
 
-    parser = argparse.ArgumentParser(description="pise: Pipeline for IS-Seq sequencing data analysis.")
+    parser = argparse.ArgumentParser(description="islan: Insertion Sequence Landscape Analyzer for IS-Seq sequencing data analysis.")
     subparsers = parser.add_subparsers(dest="subcommand", required=True, help="Subcommand to run")
 
     # Subparser: pre-process
@@ -70,12 +70,12 @@ def main():
         sys.exit(0)
 
     if args.subcommand == "pairing":
-        from pise.extract_pairs import extract_pairs
+        from islan.extract_pairs import extract_pairs
         extract_pairs(args.forward, args.reverse, args.output)
         sys.exit(0)
 
     if args.subcommand in ("pre-process", "preprocess"):
-        from pise.preprocess import run_preprocess
+        from islan.preprocess import run_preprocess
         run_preprocess(
             forward_reads=args.forward_reads,
             reverse_reads=args.reverse_reads,
@@ -90,7 +90,7 @@ def main():
         sys.exit(0)
 
     if args.subcommand == "is-mapping":
-        from pise.ismapper_adapted.main import run_is_mapping
+        from islan.ismapper_adapted.main import run_is_mapping
         run_is_mapping(args)
         sys.exit(0)
 
