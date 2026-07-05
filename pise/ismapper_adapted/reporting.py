@@ -255,46 +255,91 @@ def scan_known_is_positions(targets_fasta, ref_fasta, threads, tmp_dir):
         if os.path.exists(converted_fa):
             mapping_ref = converted_fa
 
-    from .mapping import bwa_index
-    bwa_cmd = bwa_index(mapping_ref)
-    
-    sam_file = os.path.join(tmp_dir, "targets_mapped.sam")
-    # bwa mem with -a option to output all alignments (repeats copies)
-    cmd = f"{bwa_cmd} mem -a -t {threads} {mapping_ref} {tmp_targets_fa} > {sam_file}"
-    logging.info(f"Mapping target sequences to reference genome: {cmd}")
-    run_command(cmd, shell=True)
+    import shutil
+    blastn_cmd = shutil.which("blastn")
 
-    import re
-    def get_align_len(cigar):
-        return sum(int(val) for val, op in re.findall(r'(\d+)([MIDNX=H])', cigar) if op in 'MDN=X')
+    if blastn_cmd:
+        logging.info("Optimizing known IS scanning using NCBI BLASTN...")
+        blast_out = os.path.join(tmp_dir, "blast_targets_mapped.tsv")
+        cmd = f"{blastn_cmd} -query {tmp_targets_fa} -subject {mapping_ref} -outfmt '6 qseqid sseqid pident length sstart send sstrand' > {blast_out}"
+        logging.info(f"Running blastn query: {cmd}")
+        run_command(cmd, shell=True)
 
-    if os.path.exists(sam_file):
-        with open(sam_file, "r") as f:
-            for line in f:
-                if line.startswith("@"): continue
-                parts = line.strip().split("\t")
-                if len(parts) < 6: continue
-                flag = int(parts[1])
-                if flag & 4: continue # Unmapped
-                
-                name = parts[0]
-                chrom = parts[2]
-                pos = int(parts[3])
-                cigar = parts[5]
-                
-                align_len = get_align_len(cigar)
-                start = pos
-                end = pos + align_len
-                strand = '-' if (flag & 16) else '+'
-                
-                known_is.append({
-                    'chr': chrom,
-                    'start': start,
-                    'end': end,
-                    'name': name,
-                    'strand': strand
-                })
-        logging.info(f"Identified {len(known_is)} known IS element copies on the reference genome.")
+        if os.path.exists(blast_out):
+            with open(blast_out, "r") as f:
+                for line in f:
+                    parts = line.strip().split("\t")
+                    if len(parts) < 7: continue
+                    name = parts[0]
+                    chrom = parts[1]
+                    pident = float(parts[2])
+
+                    # Filter out lower confidence matches (e.g. < 90% identity)
+                    if pident < 90.0: continue
+
+                    sstart = int(parts[4])
+                    send = int(parts[5])
+                    sstrand = parts[6]
+
+                    # Convert BLAST 1-based inclusive coordinates to 1-based exclusive to match BWA MEM
+                    if sstrand == 'plus' or sstart < send:
+                        start = sstart
+                        end = send + 1
+                        strand = '+'
+                    else:
+                        start = send
+                        end = sstart + 1
+                        strand = '-'
+
+                    known_is.append({
+                        'chr': chrom,
+                        'start': start,
+                        'end': end,
+                        'name': name,
+                        'strand': strand
+                    })
+            logging.info(f"Identified {len(known_is)} known IS element copies on the reference genome using BLASTN.")
+    else:
+        logging.warning("blastn not found on system path. Falling back to BWA MEM...")
+        from .mapping import bwa_index
+        bwa_cmd = bwa_index(mapping_ref)
+
+        sam_file = os.path.join(tmp_dir, "targets_mapped.sam")
+        cmd = f"{bwa_cmd} mem -a -t {threads} {mapping_ref} {tmp_targets_fa} > {sam_file}"
+        logging.info(f"Mapping target sequences to reference genome: {cmd}")
+        run_command(cmd, shell=True)
+
+        import re
+        def get_align_len(cigar):
+            return sum(int(val) for val, op in re.findall(r'(\d+)([MIDNX=H])', cigar) if op in 'MDN=X')
+
+        if os.path.exists(sam_file):
+            with open(sam_file, "r") as f:
+                for line in f:
+                    if line.startswith("@"): continue
+                    parts = line.strip().split("\t")
+                    if len(parts) < 6: continue
+                    flag = int(parts[1])
+                    if flag & 4: continue # Unmapped
+
+                    name = parts[0]
+                    chrom = parts[2]
+                    pos = int(parts[3])
+                    cigar = parts[5]
+
+                    align_len = get_align_len(cigar)
+                    start = pos
+                    end = pos + align_len
+                    strand = '-' if (flag & 16) else '+'
+
+                    known_is.append({
+                        'chr': chrom,
+                        'start': start,
+                        'end': end,
+                        'name': name,
+                        'strand': strand
+                    })
+            logging.info(f"Identified {len(known_is)} known IS element copies on the reference genome using BWA MEM fallback.")
     return known_is
 
 def parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_length, flank_len, targets_fasta, ref_fasta, threads):
