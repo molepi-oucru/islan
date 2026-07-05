@@ -90,7 +90,7 @@ def main():
         sys.exit(0)
 
     if args.subcommand == "is-mapping":
-        from islan.ismapper_adapted.main import run_is_mapping
+        from islan.mapping.main import run_is_mapping
         run_is_mapping(args)
         sys.exit(0)
 
