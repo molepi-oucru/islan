@@ -20,7 +20,13 @@ def run_is_mapping(args):
     for handler in list(root_logger.handlers):
         if isinstance(handler, logging.FileHandler):
             root_logger.removeHandler(handler)
-    file_handler = logging.FileHandler(log_file, mode='w')
+            
+    class FlushingFileHandler(logging.FileHandler):
+        def emit(self, record):
+            super().emit(record)
+            self.flush()
+
+    file_handler = FlushingFileHandler(log_file, mode='w')
     file_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
     root_logger.addHandler(file_handler)
     

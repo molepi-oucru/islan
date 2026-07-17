@@ -109,10 +109,15 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
     
     # Configure logging
     log_file = os.path.join(final_output_dir, "islan.log")
+    class FlushingFileHandler(logging.FileHandler):
+        def emit(self, record):
+            super().emit(record)
+            self.flush()
+
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s [%(levelname)s] %(message)s',
-        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(log_file, mode='w')]
+        handlers=[logging.StreamHandler(sys.stdout), FlushingFileHandler(log_file, mode='w')]
     )
 
     preprocess_cfg = config.get("preprocessing", {})
