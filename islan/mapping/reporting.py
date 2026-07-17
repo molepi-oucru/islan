@@ -7,6 +7,7 @@ import logging
 from Bio import SeqIO
 
 import bisect
+from islan.constants import MAX_PAIRING_DISTANCE, MAX_TSD_OVERLAP
 
 def parse_genbank(gbk_file, qualifier='product'):
     """
@@ -552,7 +553,7 @@ def parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_
             
             ov = check_overlap(lp, rp)
             if ov > 0:
-                dist = 0 if ov < 100 else float('inf')
+                dist = 0 if ov < MAX_PAIRING_DISTANCE else float('inf')
             else:
                 if lp['end'] < rp['start']:
                     dist = rp['start'] - lp['end']
@@ -561,8 +562,8 @@ def parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_
                 else:
                     dist = 0
             
-            if dist > 100:
-                if lp['end'] < rp['start'] and dist > 100:
+            if dist > MAX_PAIRING_DISTANCE:
+                if lp['end'] < rp['start'] and dist > MAX_PAIRING_DISTANCE:
                     break
                 continue
                 
@@ -752,6 +753,9 @@ def parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_
             call_val = 'novel'
         elif call_val == 'Novel Pair (TSD)':
             call_val = 'novel (TSD)'
+            
+        if gap_val != 'N/A' and isinstance(gap_val, (int, float)) and gap_val < -MAX_TSD_OVERLAP:
+            call_val = f"{call_val}*"
             
         contig = lp['chr'] if lp else rp['chr']
         

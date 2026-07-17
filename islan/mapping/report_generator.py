@@ -33,7 +33,8 @@ from islan.constants import (
     TAIL_COV_COLOR,
     GC_LINE_COLOR,
     GENE_FORWARD_COLOR,
-    GENE_REVERSE_COLOR
+    GENE_REVERSE_COLOR,
+    MAX_TSD_OVERLAP
 )
 
 def parse_bed_cov(filepath):
@@ -740,6 +741,9 @@ def generate_report(table_file, report_file, reference_file=None, cutoff=6):
             <h1>ISLAN: Insertion Sequence Landscape Analyzer Report</h1>
             <h2>Summary of Detected Insertions</h2>
             {summary_html}
+            <div style="font-size: 0.9rem; color: #4b5563; margin-top: -20px; margin-bottom: 25px; background-color: #f9fafb; padding: 12px 16px; border-radius: 8px; border-left: 4px solid #b91c1c;">
+                <strong>Note on False Positives (*):</strong> Insertion calls appended with a <strong>*</strong> indicate possible false positives (empty/wild-type loci) where the left and right flanking coverage peaks overlap by more than <strong>{MAX_TSD_OVERLAP} bp</strong>.
+            </div>
             <h2>Interactive Flanking Alignment Viewer (IGV/Artemis Style)</h2>
             <p style="color: #6b7280; margin-bottom: 25px;">
                 Use the scroll wheel/zoom tools to inspect reads, link lines, and SNPs. 
