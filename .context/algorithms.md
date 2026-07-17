@@ -1,6 +1,6 @@
 # Pipeline Logic & Algorithmic Details
 
-This document explains the algorithms, matching criteria, and processing steps implemented in the `pise` preprocessing pipeline.
+This document explains the algorithms, matching criteria, and processing steps implemented in the `islan` preprocessing pipeline.
 
 ---
 
@@ -19,14 +19,14 @@ Before reads are filtered, an optional Quality Control & Demultiplexing step is 
     - **`Index warning`**: Expected index reads account for $\ge$ 30% of total non-poly-N reads, but another index category also accounts for $\ge$ 30%.
     - **`Index OK`**: Expected index reads account for $\ge$ 30% of total non-poly-N reads, and no other category accounts for $\ge$ 30%.
 - **Outputs**:
-  - Added to the summary file `pise_summary.tsv` under the columns: `Sample_Index`, `IS_element`, `QC_Total_Forward_Reads`, `QC_PolyN_Forward_Reads`, `QC_Undetermined_Forward_Reads`, `QC_NonPolyN_Forward_Reads`, `Filtering_Status`.
+  - Added to the summary file `islan_summary.tsv` under the columns: `Sample_Index`, `IS_element`, `QC_Total_Forward_Reads`, `QC_PolyN_Forward_Reads`, `QC_Undetermined_Forward_Reads`, `QC_NonPolyN_Forward_Reads`, `Filtering_Status`.
   - Creates demultiplexed FASTQ files in `demux_reads/` as inputs to the filtering stage.
 
 ---
 
 ## 1. Reads Filtering & Trimming Algorithm
 
-The core filtering step (implemented in `pise/filter_reads.py`) processes forward reads to trim the index, output filtered forward reads, and extract HEAD/TAIL segments.
+The core filtering step (implemented in `islan/filter_reads.py`) processes forward reads to trim the index, output filtered forward reads, and extract HEAD/TAIL segments.
 
 ```mermaid
 flowchart TD
@@ -81,7 +81,7 @@ For each target primer $P$ (HEAD or TAIL) of length $L_P$:
 
 ## 2. Reverse Reads Pairing (Deferred)
 
-Since IS-Seq uses paired-end sequencing, the reverse reads must match the filtered forward reads. Rather than running both simultaneously, the reverse matching is deferred to a separate script `pise/extract_pairs.py`:
+Since IS-Seq uses paired-end sequencing, the reverse reads must match the filtered forward reads. Rather than running both simultaneously, the reverse matching is deferred to a separate script `islan/extract_pairs.py`:
 - **Method**: The forward filtering stage generates `{sample}_filtered_1.fastq.gz` containing the filtered forward reads.
 - **Processing**: The `extract_pairs.py` script reads the forward FASTQ file (or a plain text file of read IDs), collects the set of passed read IDs, and scans the raw reverse FASTQ read file sequentially. For any reverse read matching a forward read ID, it writes it to the output reverse FASTQ file.
 - **Complexity**: $O(N)$ to build the lookup set of forward IDs, and $O(1)$ lookup complexity per read when scanning the reverse FASTQ. This ensures the output reverse files match the filtered forward files exactly.
@@ -92,7 +92,7 @@ Since IS-Seq uses paired-end sequencing, the reverse reads must match the filter
 
 The pipeline utilizes two distinct levels of parallel processing to maximize resource utilization and avoid nested multiprocessing bottlenecks:
 
-1. **Sample-level Parallel QC (Phase 1)**: QC and demultiplexing are parallelized across samples using `concurrent.futures.ProcessPoolExecutor` in `pise/main.py`. This submits multiple `run_qc` runs concurrently.
+1. **Sample-level Parallel QC (Phase 1)**: QC and demultiplexing are parallelized across samples using `concurrent.futures.ProcessPoolExecutor` in `islan/main.py`. This submits multiple `run_qc` runs concurrently.
 2. **Batch-level Parallel Filtering (Phase 2)**: Filtering is run sequentially per sample, but internally parallelized across reads within each file using `multiprocessing.Pool`.
    - **Batching**: Read streams are parsed and chunked into batches of 5000 records.
    - **Serialization**: Read records are serialized as basic python tuples rather than heavy `Bio.SeqRecord` objects, minimizing inter-process communication overhead.
@@ -101,7 +101,7 @@ The pipeline utilizes two distinct levels of parallel processing to maximize res
 
 ---
 
-## 4. IS Mapping & Tandem Classification Algorithm (`pise is-mapping`)
+## 4. IS Mapping & Tandem Classification Algorithm (`islan is-mapping`)
 
 The mapping stage aligns preprocessed reads to the reference sequence and uses a 3-stage coordinate pairing logic to characterize insertions.
 
@@ -111,12 +111,12 @@ The mapping stage aligns preprocessed reads to the reference sequence and uses a
 3. Flanking `HEAD` and `TAIL` peaks within a `--flank-len` (default 300 bp) window around these boundaries are paired and flagged as `Known Pair` hits.
 
 ### Step 4.2: Novel Insertion & Tandem Characterization (Stage 2)
-Active un-paired peaks are resolved using coordinate overlap definitions:
+Active un-paired peaks are resolved using coordinate overlap definitions and centralized constants:
 - **Tandem Same-Direction (`++` or `--`)**: `l_peak_1` (HEAD) partially overlaps central fully overlapping pair `[r_peak_1, l_peak_2]`, which partially overlaps `r_peak_2` (TAIL).
 - **Tandem Opposite-Direction (`+-`)**: Multiple `HEAD` peaks (`lp1`, `lp2`) partially overlap a single central `rpN` (TAIL).
 - **Tandem Opposite-Direction (`-+`)**: Multiple `TAIL` peaks (`rp1`, `rp2`) partially overlap a single central `lpN` (HEAD).
-- **Novel Pair (TSD)**: Remaining `HEAD` and `TAIL` peaks partially overlap (typically $< 100$ bp).
-- **Novel Pair (Standard)**: Remaining `HEAD` and `TAIL` peaks are within 100 bp gap distance but do not overlap.
+- **Novel Pair (TSD)**: Remaining `HEAD` and `TAIL` peaks partially overlap. The overlap size must be less than `MAX_PAIRING_DISTANCE` (default: 100 bp). If the overlap exceeds `MAX_TSD_OVERLAP` (default: 20 bp), the call is flagged with a `*` suffix (e.g. `novel (TSD)*`) to indicate possible false positives.
+- **Novel Pair (Standard)**: Remaining `HEAD` and `TAIL` peaks do not overlap but are within `MAX_PAIRING_DISTANCE` (default: 100 bp) gap distance.
 
 ### Step 4.3: Noise and Singleton Resolution (Stage 3)
 - **PCR Off-Target Noise**: Remaining `HEAD` and `TAIL` peaks that fully overlap (containment ratio $> 90\%$) are classified as `Off-Target Amplicon (Noise)`.

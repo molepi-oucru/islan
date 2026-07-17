@@ -1,6 +1,6 @@
 # Command Reference
 
-This file compiles useful commands for running, testing, and managing the `pise` analysis pipeline.
+This file compiles useful commands for running, testing, and managing the `islan` analysis pipeline.
 
 ## Installation
 
@@ -27,67 +27,66 @@ pip install -e .
 
 ## Running the Pipeline
 
-### Preprocessing & Filtering (`pise pre-process`)
+### Preprocessing & Filtering (`islan pre-process`)
 Run from the root directory:
 - **Single-Sample Mode (using `uv`)**:
   ```bash
-  uv run pise pre-process --config config/config.yaml /path/to/reads_1.fastq.gz /path/to/reads_2.fastq.gz --threads 8 --qc True --i5-mismatch 2 --min_len 20
+  uv run islan pre-process --config config/config.yaml /path/to/reads_1.fastq.gz /path/to/reads_2.fastq.gz --threads 8 --qc True --i5-mismatch 2 --min_len 20
   ```
 - **Single-Sample Mode (using Conda)**:
   ```bash
-  pise pre-process --config config/config.yaml /path/to/reads_1.fastq.gz /path/to/reads_2.fastq.gz --threads 8 --qc True --i5-mismatch 2 --min_len 20
+  islan pre-process --config config/config.yaml /path/to/reads_1.fastq.gz /path/to/reads_2.fastq.gz --threads 8 --qc True --i5-mismatch 2 --min_len 20
   ```
 - **Batch Mode for Multiple Samples (using `uv`)**:
   ```bash
-  uv run pise pre-process --threads 8 --qc True /path/to/raw_reads_directory
+  uv run islan pre-process --threads 8 --qc True /path/to/raw_reads_directory
   ```
 - **Batch Mode for Multiple Samples (using Conda)**:
   ```bash
-  pise pre-process --threads 8 --qc True /path/to/raw_reads_directory
+  islan pre-process --threads 8 --qc True /path/to/raw_reads_directory
   ```
 
-### ASV Analysis (`pise asv-analysis`)
+### ASV Analysis (`islan asv-analysis`)
 Run ASV analysis:
 ```bash
-uv run pise asv-analysis --config config/config.yaml
+uv run islan asv-analysis --config config/config.yaml
 ```
 
-### Pairing Reverse Reads (`pise pairing`)
+### Pairing Reverse Reads (`islan pairing`)
 Extract reverse reads matching your filtered forward reads or ID list:
 - **Using forward FASTQ**:
   ```bash
-  uv run pise pairing \
+  uv run islan pairing \
     -f results_asv/filtered_reads/sample_filtered_1.fastq.gz \
     -r /path/to/raw_reads_2.fastq.gz \
     -o results_asv/filtered_reads/sample_filtered_2.fastq.gz
   ```
 - **Using plain text list of IDs**:
   ```bash
-  uv run pise pairing \
+  uv run islan pairing \
     -f /path/to/ids.txt \
     -r /path/to/raw_reads_2.fastq.gz \
     -o results_asv/filtered_reads/sample_filtered_2.fastq.gz
   ```
 
-### IS Mapping (`pise is-mapping`)
+### IS Mapping (`islan is-mapping`)
 Map filtered reads to identify insertion sites on a reference genome.
 - **WGS Mode**: Map raw forward/reverse reads:
   ```bash
-  uv run pise is-mapping --mode wgs \
-    -1 /path/to/sample_R1.fastq.gz -2 /path/to/sample_R2.fastq.gz \
-    --is_query /path/to/IS.fasta \
-    --ref_seq /path/to/reference.gbk \
+  uv run islan is-mapping \
+    --reads /path/to/sample_R1.fastq.gz /path/to/sample_R2.fastq.gz \
+    --queries /path/to/IS.fasta \
+    --reference /path/to/reference.gbk \
     --output_dir results_wgs_mapping
   ```
 - **Targeted Mode**: Map filtered and extracted HEAD/TAIL reads directly:
   ```bash
-  uv run pise is-mapping --mode targeted \
+  uv run islan is-mapping --targeted \
+    --head results_asv/filtered_reads/sample_filtered_1_HEAD.fastq.gz \
+    --tail results_asv/filtered_reads/sample_filtered_1_TAIL.fastq.gz \
     --filtered_forward results_asv/filtered_reads/sample_filtered_1.fastq.gz \
     --filtered_reverse results_asv/filtered_reads/sample_filtered_2.fastq.gz \
-    --filtered_head results_asv/filtered_reads/sample_filtered_1_HEAD.fastq.gz \
-    --filtered_tail results_asv/filtered_reads/sample_filtered_1_TAIL.fastq.gz \
-    --ref_seq /path/to/reference.gbk \
-    --min_endogenous_depth 50 \
+    --reference /path/to/reference.gbk \
     --output_dir results_targeted_mapping
   ```
 
@@ -101,4 +100,3 @@ Map filtered reads to identify insertion sites on a reference genome.
   ```bash
   pytest
   ```
-

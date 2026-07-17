@@ -134,15 +134,17 @@ Active un-paired peaks are processed using coordinate-based overlap check functi
    - Signature `+-` (pointing towards each other): Two `HEAD` peaks (`lp1`, `lp2`) both partially overlap with a single central `rpN` (TAIL). Reported as `Tandem Pair (+-)`.
    - Signature `-+` (pointing away from each other): Two `TAIL` peaks (`rp1`, `rp2`) both partially overlap with a single central `lpN` (HEAD). Reported as `Tandem Pair (-+)`.
 3. **Novel Pair (with Target Site Duplications - TSD)**:
-   - Signature: A remaining `HEAD` and `TAIL` peak partially overlap each other (overlap length usually $< 100$ bp).
-   - Reported as `Novel Pair (TSD)`.
+   - Signature: A remaining `HEAD` and `TAIL` peak partially overlap each other.
+   - Distance logic: The overlap size must be smaller than the `MAX_PAIRING_DISTANCE` (default: 100 bp).
+   - Flagging possible false positives: If the overlap size is larger than the `MAX_TSD_OVERLAP` threshold (default: 20 bp), the call is appended with a `*` suffix (e.g. `novel (TSD)*`) to pinpoint potential empty/wild-type loci arising from non-specific primer binding.
+   - Reported as `Novel Pair (TSD)` (or `Novel Pair (TSD)*`).
 4. **Novel Pair (Standard)**:
-   - Signature: A remaining `HEAD` and `TAIL` peak do not overlap but are within 100 bp of each other.
+   - Signature: A remaining `HEAD` and `TAIL` peak do not overlap but are within `MAX_PAIRING_DISTANCE` (default: 100 bp) of each other.
    - Reported as `Novel Pair`.
 
 #### Stage 3: Resolve Singletons and Noise
 1. **Off-Target Amplicon (Noise)**:
-   - If a remaining `HEAD` and `TAIL` peak fully overlap (checked using `is_full_overlap`), they represent off-target PCR amplification.
+   - If a remaining `HEAD` and `TAIL` peak fully overlap (containment ratio $> 90\%$), they represent off-target PCR amplification.
    - Re-classified as `Off-Target Amplicon (Noise)` and moved to the unpaired TSV.
 2. **Singletons**:
    - Remaining un-paired peaks are reported as `HEAD-only` or `TAIL-only` singletons in the unpaired TSV.
@@ -182,7 +184,7 @@ ISLAN outputs two main TSV files:
 | `x` | Left-most boundary of the insertion site. |
 | `y` | Right-most boundary of the insertion site. |
 | `gap` | Gap distance between insertion site boundaries. Positive for non-overlapping gaps; negative for overlaps (TSDs). |
-| `call` | Classification of the hit: `known`, `novel`, `novel (TSD)`. |
+| `call` | Classification of the hit: `known`, `novel`, `novel (TSD)`. Hits appended with `*` (e.g., `novel (TSD)*`) indicate possible false positives where the flanking peaks overlap by more than `MAX_TSD_OVERLAP` (20 bp). |
 | `left_pos` | Chromosome coordinate range of the left flanking region. |
 | `right_pos` | Chromosome coordinate range of the right flanking region. |
 | `left_depth_median` | Median coverage depth across the left flanking peak. |
