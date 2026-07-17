@@ -5,16 +5,17 @@ import argparse
 from .mapping import map_to_is_query_wgs, extract_targeted_flanks_pyfastx, map_to_ref_seq, create_bed_files
 from .reporting import create_typing_output
 from .report_generator import generate_report
+from islan.constants import DEFAULT_OUTPUT_DIR, MAPPING_LOG_FILE
 
 def run_is_mapping(args):
     """Entry point for the is-mapping pipeline."""
     # Ensure directories
-    out_dir = os.path.abspath(args.output_dir if args.output_dir else "results_ismapper")
+    out_dir = os.path.abspath(args.output_dir if args.output_dir else DEFAULT_OUTPUT_DIR)
     tmp_dir = os.path.join(out_dir, "tmp")
     os.makedirs(tmp_dir, exist_ok=True)
     
     # Configure file logging
-    log_file = os.path.join(out_dir, "islan_is_mapping.log")
+    log_file = os.path.join(out_dir, MAPPING_LOG_FILE)
     root_logger = logging.getLogger()
     for handler in list(root_logger.handlers):
         if isinstance(handler, logging.FileHandler):
@@ -127,7 +128,7 @@ def run_is_mapping(args):
     
     # Generate HTML report
     report_file = os.path.join(out_dir, f"{sample_prefix}__{ref_base}_report.html")
-    generate_report(out_table, report_file, cutoff=args.cutoff)
+    generate_report(out_table, report_file, reference_file=args.reference, cutoff=args.cutoff)
     
     if not getattr(args, 'temp', False):
         import shutil

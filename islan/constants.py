@@ -1,0 +1,51 @@
+# Centralized Constants for the ISLAN Pipeline
+
+# Preprocessing and filtering constants
+INDEX_LEN = 8
+BATCH_SIZE = 5000
+
+# Alignment viewer constants
+MAX_ALIGNMENT_READS = 100
+GC_WINDOW_SIZE = 21
+FLANK_PADDING = 15
+PLOT_HEIGHT = 800
+READ_PADDING = 6
+ZOOM_THRESHOLD = 150
+EXTENSION_PADDING = 5000
+
+# Colors for visualization
+BASE_COLORS = {
+    'A': '#0f9d58', # Green
+    'C': '#4285f4', # Blue
+    'G': '#f4b400', # Orange/Yellow
+    'T': '#db4437'  # Red
+}
+
+HEAD_READ_REVERSE_COLOR = 'rgba(147, 197, 253, 0.85)'
+HEAD_READ_FORWARD_COLOR = 'rgba(37, 99, 235, 0.85)'
+TAIL_READ_REVERSE_COLOR = 'rgba(252, 165, 165, 0.85)'
+TAIL_READ_FORWARD_COLOR = 'rgba(220, 38, 38, 0.85)'
+
+HEAD_COV_COLOR = 'rgba(66, 133, 244, 0.8)'
+TAIL_COV_COLOR = 'rgba(219, 68, 85, 0.8)'
+GC_LINE_COLOR = 'rgba(15, 157, 88, 0.85)'
+
+GENE_FORWARD_COLOR = 'rgba(244, 180, 0, 0.8)'
+GENE_REVERSE_COLOR = 'rgba(171, 71, 188, 0.8)'
+
+# Pipeline default parameters
+DEFAULT_OUTPUT_DIR = "results_ismapper"
+MAPPING_LOG_FILE = "islan_is_mapping.log"
+DEFAULT_MIN_CLIP = 10
+DEFAULT_MAX_CLIP = 30
+DEFAULT_CUTOFF = 6
+DEFAULT_MERGING = 100
+DEFAULT_IS_LENGTH = 4000
+DEFAULT_MIN_MAPQ = 30
+DEFAULT_FLANK_LEN = 300
+DEFAULT_THREADS = 1
+
+DEFAULT_MIN_LEN = 20
+DEFAULT_I5_MISMATCH = 2
+DEFAULT_QC = True
+DEFAULT_THREADS_PREPROCESS = 8

@@ -6,6 +6,7 @@ import multiprocessing
 from functools import partial
 from Bio import SeqIO
 from Bio.Seq import Seq
+from islan.constants import BATCH_SIZE
 
 def load_primers(fasta_file_path, target_is_element):
     primers = {}
@@ -103,7 +104,7 @@ def process_batch_worker(batch_data, primers, min_cov, min_identity, min_len, in
                 
     return passed_filtered, passed_head, passed_tail, len(batch_data)
 
-def stream_batches(fastq_path, batch_size=5000):
+def stream_batches(fastq_path, batch_size=BATCH_SIZE):
     with gzip.open(fastq_path, "rt") as infile:
         current_batch = []
         while True:
@@ -155,7 +156,7 @@ def process_forward_reads(forward_fastq_path, primers, min_cov, min_identity, mi
              gzip.open(output_head_path, "wt") as out_head, \
              gzip.open(output_tail_path, "wt") as out_tail:
              
-            batches_gen = stream_batches(forward_fastq_path, batch_size=5000)
+            batches_gen = stream_batches(forward_fastq_path, batch_size=BATCH_SIZE)
 
             with multiprocessing.Pool(processes=threads) as pool:
                 for passed_filtered, passed_head, passed_tail, batch_size in pool.imap(worker_func, batches_gen):

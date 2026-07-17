@@ -5,7 +5,7 @@ import concurrent.futures
 from Bio import SeqIO
 from islan import filter_reads
 
-INDEX_LEN = 8
+from islan.constants import INDEX_LEN
 
 def load_config(filepath):
     config = {}
