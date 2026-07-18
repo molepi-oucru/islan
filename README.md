@@ -1,6 +1,6 @@
-# ISLAN: Insertion Sequence Landscape Analyzer
+# ISLAN: Insertion Sequence Landscape Analyser
 
-A modular Python package and command-line pipeline for preprocessing and analyzing Insertion Sequence Sequencing (IS-Seq) reads.
+A modular Python package and command-line pipeline for processing and analyzing Insertion Sequence Sequencing (IS-Seq) reads.
 
 ## Repository Layout
 ```

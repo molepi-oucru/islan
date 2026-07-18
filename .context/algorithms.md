@@ -115,10 +115,11 @@ Active un-paired peaks are resolved using coordinate overlap definitions and cen
 - **Tandem Same-Direction (`++` or `--`)**: `l_peak_1` (HEAD) partially overlaps central fully overlapping pair `[r_peak_1, l_peak_2]`, which partially overlaps `r_peak_2` (TAIL).
 - **Tandem Opposite-Direction (`+-`)**: Multiple `HEAD` peaks (`lp1`, `lp2`) partially overlap a single central `rpN` (TAIL).
 - **Tandem Opposite-Direction (`-+`)**: Multiple `TAIL` peaks (`rp1`, `rp2`) partially overlap a single central `lpN` (HEAD).
-- **Novel Pair (TSD)**: Remaining `HEAD` and `TAIL` peaks partially overlap. The overlap size must be less than `MAX_PAIRING_DISTANCE` (default: 100 bp). If the overlap exceeds `MAX_TSD_OVERLAP` (default: 20 bp), the call is flagged with a `*` suffix (e.g. `novel (TSD)*`) to indicate possible false positives.
+- **Novel Pair (TSD)**: Remaining `HEAD` and `TAIL` peaks partially overlap. The overlap size must be less than `MAX_PAIRING_DISTANCE` (default: 100 bp). If the overlap exceeds `MAX_TSD_OVERLAP` (default: 20 bp), the call is flagged with a `*` suffix (i.e. `novel (TSD)*`) to indicate possible false positives. Note that the `*` suffix is only biologically meaningful for the `novel (TSD)` class and is not appended to other classes.
 - **Novel Pair (Standard)**: Remaining `HEAD` and `TAIL` peaks do not overlap but are within `MAX_PAIRING_DISTANCE` (default: 100 bp) gap distance.
 
 ### Step 4.3: Noise and Singleton Resolution (Stage 3)
-- **PCR Off-Target Noise**: Remaining `HEAD` and `TAIL` peaks that fully overlap (containment ratio $> 90\%$) are classified as `Off-Target Amplicon (Noise)`.
+- **PCR Off-Target Noise**: Remaining `HEAD` and `TAIL` peaks that fully overlap (containment ratio $> 90\%$) are classified as `Off-Target Amplicon (Noise)`. In the HTML report, this class is displayed as `Left-Right Imbalance Depth`.
 - **Singletons**: Remaining un-paired peaks are classified as `HEAD-only` or `TAIL-only` singletons.
 - **Output Split**: Paired hits (Stages 1 and 2) are written to `{sample}_table.tsv` with flanking gene annotations. Singletons and Noise are written to `{sample}_unpaired.tsv` with gene columns omitted. Depth stats are reported as median and IQR.
+

@@ -136,18 +136,19 @@ Active un-paired peaks are processed using coordinate-based overlap check functi
 3. **Novel Pair (with Target Site Duplications - TSD)**:
    - Signature: A remaining `HEAD` and `TAIL` peak partially overlap each other.
    - Distance logic: The overlap size must be smaller than the `MAX_PAIRING_DISTANCE` (default: 100 bp).
-   - Flagging possible false positives: If the overlap size is larger than the `MAX_TSD_OVERLAP` threshold (default: 20 bp), the call is appended with a `*` suffix (e.g. `novel (TSD)*`) to pinpoint potential empty/wild-type loci arising from non-specific primer binding.
-   - Reported as `Novel Pair (TSD)` (or `Novel Pair (TSD)*`).
+    - Flagging possible false positives: If the overlap size is larger than the `MAX_TSD_OVERLAP` threshold (default: 20 bp), the call is appended with a `*` suffix (i.e. `novel (TSD)*`) to pinpoint potential empty/wild-type loci arising from non-specific primer binding. Note that this suffix is only biologically meaningful for and restricted to the `novel (TSD)` class.
+    - Reported as `Novel Pair (TSD)` (or `Novel Pair (TSD)*`).
 4. **Novel Pair (Standard)**:
    - Signature: A remaining `HEAD` and `TAIL` peak do not overlap but are within `MAX_PAIRING_DISTANCE` (default: 100 bp) of each other.
    - Reported as `Novel Pair`.
 
+
 #### Stage 3: Resolve Singletons and Noise
 1. **Off-Target Amplicon (Noise)**:
-   - If a remaining `HEAD` and `TAIL` peak fully overlap (containment ratio $> 90\%$), they represent off-target PCR amplification.
-   - Re-classified as `Off-Target Amplicon (Noise)` and moved to the unpaired TSV.
+    - If a remaining `HEAD` and `TAIL` peak fully overlap (containment ratio $> 90\%$), they represent off-target PCR amplification.
+    - Re-classified as `Off-Target Amplicon (Noise)` and moved to the unpaired TSV.
 2. **Singletons**:
-   - Remaining un-paired peaks are reported as `HEAD-only` or `TAIL-only` singletons in the unpaired TSV.
+    - Remaining un-paired peaks are reported as `HEAD-only` or `TAIL-only` singletons in the unpaired TSV.
 
 ---
 
@@ -184,7 +185,7 @@ ISLAN outputs two main TSV files:
 | `x` | Left-most boundary of the insertion site. |
 | `y` | Right-most boundary of the insertion site. |
 | `gap` | Gap distance between insertion site boundaries. Positive for non-overlapping gaps; negative for overlaps (TSDs). |
-| `call` | Classification of the hit: `known`, `novel`, `novel (TSD)`. Hits appended with `*` (e.g., `novel (TSD)*`) indicate possible false positives where the flanking peaks overlap by more than `MAX_TSD_OVERLAP` (20 bp). |
+| `call` | Classification of the hit: `known`, `novel`, `novel (TSD)`. If a `novel (TSD)` hit has a flanking overlap exceeding `MAX_TSD_OVERLAP` (20 bp), it is reported as `novel (TSD)*` to indicate possible false positives (empty/wild-type loci). Other classes do not receive the `*` suffix. |
 | `left_pos` | Chromosome coordinate range of the left flanking region. |
 | `right_pos` | Chromosome coordinate range of the right flanking region. |
 | `left_depth_median` | Median coverage depth across the left flanking peak. |
@@ -200,3 +201,26 @@ ISLAN outputs two main TSV files:
 | `right_strand` | Coding strand of the downstream gene (`1` or `-1`). |
 | `right_distance` | Distance (bp) from the insertion boundary `y` to the downstream gene. |
 | `gene_interruption`| Evaluates as `True` if the insertion is located within the coding sequence (CDS) of either flanking gene. |
+
+---
+
+## 6. HTML Visualization Report
+
+The pipeline generates an interactive HTML visualization report (`{sample}__{reference}_report.html`) containing three main sections:
+
+### 6.1 Section 1: Summary Table
+- Displays a tight, compact summary table detailing the counts for each of the core detection classes (including zero-count rows shown in muted grey for easy follow).
+- The class `'Off-Target Amplicon (Noise)'` is dynamically renamed to `'Left-Right Imbalance Depth'` for clearer representation in the HTML report.
+
+### 6.2 Section 2: Known IS Loci on Reference (BLASTN)
+- Displays all reference IS positions scanned by BLASTN (within a window defined by `EXTENSION_PADDING = 2500` bp).
+- **POSITIVE (Green Badge)**: Indicates known IS loci with paired read evidence (plots only show the paired flanks and their mapped reads).
+- **NEGATIVE (Amber Badge)**: Indicates known IS loci without paired read evidence (plots show singleton/unpaired flanking reads, GC content, gene annotations, and the IS body coordinates).
+
+### 6.3 Section 3: Novel IS Loci
+- Displays interactive alignments (using the `generate_combined_alignment_plotly` viewer) for each novel insertion.
+- Cards are color-coded based on the detection class:
+  - **Indigo border**: Standard `novel` insertions
+  - **Teal border**: `novel (TSD)` insertions
+  - **Amber border**: `novel (TSD)*` potential false-positive insertions
+- CDS/gene disruption badges and flanking gene descriptions are displayed directly in the header of each card.
