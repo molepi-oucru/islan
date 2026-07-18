@@ -4,8 +4,8 @@ import logging
 import concurrent.futures
 from Bio import SeqIO
 from islan import filter_reads
+from islan.constants import INDEX_LEN, ISElementRegistry
 
-from islan.constants import INDEX_LEN
 
 def load_config(filepath):
     config = {}
@@ -45,18 +45,9 @@ def load_config(filepath):
                 config[key] = parsed_val
     return config
 
-def get_all_is_elements(primers_file):
-    is_elements = set()
-    try:
-        with open(primers_file, "r") as handle:
-            for record in SeqIO.parse(handle, "fasta"):
-                parts = record.id.split(':')
-                if len(parts) >= 2: is_elements.add(parts[1])
-    except Exception as e:
-        logging.error(f"Error reading primers database file: {e}")
-    return sorted(list(is_elements))
 
 def discover_samples(input_dir):
+    """Discover paired FASTQ sample files in a directory."""
     samples = []
     for filename in sorted(os.listdir(input_dir)):
         if filename.endswith("_1.fastq.gz"):
@@ -68,15 +59,9 @@ def discover_samples(input_dir):
                 samples.append((sample_prefix, f1_path, f2_path))
     return samples
 
-def resolve_is_element(name):
-    name_clean = name.upper()
-    if "IS1R" in name_clean: return "IS1R_IS1", "IS1R"
-    if "ISAEME19" in name_clean: return "ISAeme19_ISL3", "ISAeme19"
-    if "ISKOX3" in name_clean or "ISKOX5" in name_clean: return "ISKox3_ISL3", "ISKox3"
-    if "ISKPN26" in name_clean: return "ISKpn26_IS5", "ISKpn26"
-    return None, None
 
 def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=None, index_i5=None, qc=None, i5_mismatch=None, min_len=None, output_dir=None):
+
     package_dir = os.path.dirname(os.path.abspath(__file__))
     pkg_project_root = os.path.dirname(package_dir)
     default_config_path = os.path.join(pkg_project_root, "config", "config.yaml")
@@ -92,8 +77,8 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
         logging.error(f"Error parsing configuration file: {e}")
         sys.exit(1)
 
-    target_is_element = config.get("target_is_element", "IS1R_IS1")
-    
+    target_is_element = config.get("target_is_element", None)
+
     primers_file = config.get("primers_file", "config/primers.fasta")
     if primers_file and not os.path.isabs(primers_file):
         config_dir = os.path.dirname(config_filepath)
@@ -102,6 +87,28 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
         else:
             candidate_path = os.path.abspath(os.path.join(pkg_project_root, primers_file))
             primers_file = candidate_path if os.path.exists(candidate_path) else os.path.abspath(primers_file)
+
+    targets_file = config.get("targets_file", "config/targets.fasta")
+    if targets_file and not os.path.isabs(targets_file):
+        config_dir = os.path.dirname(config_filepath)
+        candidate_path = os.path.abspath(os.path.join(os.path.dirname(config_dir), targets_file))
+        if os.path.exists(candidate_path): targets_file = candidate_path
+        else:
+            candidate_path = os.path.abspath(os.path.join(pkg_project_root, targets_file))
+            targets_file = candidate_path if os.path.exists(candidate_path) else os.path.abspath(targets_file)
+
+    # Build the IS element registry from targets.fasta (single source of truth)
+    registry = ISElementRegistry(targets_file)
+    if not registry.all_short_names:
+        logging.warning(f"ISElementRegistry: no IS elements found in '{targets_file}'. "
+                        "Falling back to primers_file for registry.")
+        registry = ISElementRegistry(primers_file)
+    if not registry.all_short_names:
+        logging.error("Could not build IS element registry from targets_file or primers_file. "
+                      "Check that targets.fasta exists and has valid headers.")
+        sys.exit(1)
+    logging.info(f"IS element registry loaded: {registry.all_full_names}")
+
 
     out_dir_cfg = config.get("output_dir", "results")
     final_output_dir = os.path.abspath(output_dir if output_dir is not None else out_dir_cfg)
@@ -150,12 +157,12 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
             sys.exit(1)
         
         for sample_prefix, f1_path, f2_path in raw_samples:
-            matched_element, expected_cat = resolve_is_element(sample_prefix)
+            matched_element, expected_cat = registry.resolve(sample_prefix)
             if matched_element:
                 batch_tasks.append({
-                    'sample_id': sample_prefix, 
-                    'forward': f1_path, 
-                    'reverse': f2_path, 
+                    'sample_id': sample_prefix,
+                    'forward': f1_path,
+                    'reverse': f2_path,
                     'target_is_element': matched_element,
                     'expected_category': expected_cat
                 })
@@ -165,9 +172,9 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
         if not batch_tasks: sys.exit(1)
     else:
         sample_id = os.path.basename(forward_reads).replace("_1.fastq.gz", "").replace(".fastq.gz", "")
-        matched_element, expected_cat = resolve_is_element(sample_id)
-        chosen_target = matched_element if matched_element else target_is_element
-        chosen_cat = expected_cat if expected_cat else target_is_element.split('_')[0]
+        matched_element, expected_cat = registry.resolve(sample_id)
+        chosen_target = matched_element if matched_element else (target_is_element or registry.all_full_names[0])
+        chosen_cat = expected_cat if expected_cat else chosen_target.split('_')[0]
         
         rev_path = reverse_reads
         if not rev_path and forward_reads.endswith("_1.fastq.gz"):
@@ -209,9 +216,10 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
                     continue
                 
                 logging.info(f"Submitting QC task for {cur_sample}")
-                f = executor.submit(run_qc, cur_forward, cur_sample, qc_output_dir, primers_file, primers, index_i5_val, i5_mismatch_val)
+                f = executor.submit(run_qc, cur_forward, cur_sample, qc_output_dir, primers_file, primers,
+                                   index_i5_val, i5_mismatch_val, registry.all_short_names)
                 futures[f] = task
-                
+
         for future in concurrent.futures.as_completed(futures):
             task = futures[future]
             cur_sample = task['sample_id']
@@ -220,12 +228,12 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
                 polyn_pct = (fw_polyn / fw_total * 100) if fw_total > 0 else 0
                 fw_valid = fw_total - fw_polyn
                 valid_pct = (fw_valid / fw_total * 100) if fw_total > 0 else 0
-                
+
                 logging.info(f"  QC Finished for {cur_sample}:")
                 logging.info(f"    - Total reads: {fw_total}")
                 logging.info(f"    - Poly-N reads: {fw_polyn} ({polyn_pct:.2f}%)")
                 logging.info(f"    - Valid reads: {fw_valid} ({valid_pct:.2f}%)")
-                
+
                 qc_results[cur_sample] = {
                     'QC_Total_Forward_Reads': fw_total,
                     'QC_PolyN_Forward_Reads': fw_polyn,
@@ -278,7 +286,7 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
                     status = "Index failure"
                 else:
                     other_warning = False
-                    for other_cat in ["IS1R", "ISAeme19", "ISKox3", "ISKpn26"]:
+                    for other_cat in registry.all_short_names:
                         if other_cat != expected_cat:
                             other_pct = (cat_counts.get(other_cat, 0) / total_non_polyN) * 100
                             if other_pct >= 30.0:

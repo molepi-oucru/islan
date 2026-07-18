@@ -9,18 +9,59 @@ from islan.constants import DEFAULT_OUTPUT_DIR, MAPPING_LOG_FILE
 
 def run_is_mapping(args):
     """Entry point for the is-mapping pipeline."""
+    # ------------------------------------------------------------------
+    # 0. Load optional config file and merge with CLI args.
+    #    Priority: CLI arg (not None) > config file > constants default.
+    # ------------------------------------------------------------------
+    from islan.preprocess import load_config
+    from islan.constants import (
+        DEFAULT_THREADS, DEFAULT_MIN_CLIP, DEFAULT_MAX_CLIP, DEFAULT_CUTOFF,
+        DEFAULT_MERGING, DEFAULT_IS_LENGTH, DEFAULT_MIN_MAPQ, DEFAULT_FLANK_LEN,
+        ISElementRegistry,
+    )
+
+    cfg_mapping = {}
+    if getattr(args, 'config', None):
+        try:
+            full_cfg = load_config(args.config)
+            cfg_mapping = full_cfg.get('is_mapping', {})
+        except Exception as exc:
+            import sys
+            logging.error(f"Failed to load config file '{args.config}': {exc}")
+            sys.exit(1)
+
+    def _get(attr, cfg_key, default):
+        """Return CLI value if set, else config value, else constant default."""
+        cli_val = getattr(args, attr, None)
+        if cli_val is not None:
+            return cli_val
+        return cfg_mapping.get(cfg_key, default)
+
+    # Apply merged values back onto args so the rest of the function is unchanged
+    args.threads   = _get('threads',   'threads',   DEFAULT_THREADS)
+    args.min_clip  = _get('min_clip',  'min_clip',  DEFAULT_MIN_CLIP)
+    args.max_clip  = _get('max_clip',  'max_clip',  DEFAULT_MAX_CLIP)
+    args.cutoff    = _get('cutoff',    'cutoff',    DEFAULT_CUTOFF)
+    args.merging   = _get('merging',   'merging',   DEFAULT_MERGING)
+    args.is_length = _get('is_length', 'is_length', DEFAULT_IS_LENGTH)
+    args.min_mapq  = _get('min_mapq',  'min_mapq',  DEFAULT_MIN_MAPQ)
+    args.flank_len = _get('flank_len', 'flank_len', DEFAULT_FLANK_LEN)
+    # is_name: CLI > config > None
+    if not args.is_name:
+        args.is_name = cfg_mapping.get('is_name', None) or None
+
     # Ensure directories
     out_dir = os.path.abspath(args.output_dir if args.output_dir else DEFAULT_OUTPUT_DIR)
     tmp_dir = os.path.join(out_dir, "tmp")
     os.makedirs(tmp_dir, exist_ok=True)
-    
+
     # Configure file logging
     log_file = os.path.join(out_dir, MAPPING_LOG_FILE)
     root_logger = logging.getLogger()
     for handler in list(root_logger.handlers):
         if isinstance(handler, logging.FileHandler):
             root_logger.removeHandler(handler)
-            
+
     class FlushingFileHandler(logging.FileHandler):
         def emit(self, record):
             super().emit(record)
@@ -29,12 +70,12 @@ def run_is_mapping(args):
     file_handler = FlushingFileHandler(log_file, mode='w')
     file_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
     root_logger.addHandler(file_handler)
-    
-    sample_prefix = "sample" # Determine from input
-    
+
+    sample_prefix = "sample"  # Determine from input
+
     left_flanking = None
     right_flanking = None
-    
+
     if args.targeted:
         logging.info("Running in TARGETED mode...")
         if args.forward_only:
@@ -45,7 +86,7 @@ def run_is_mapping(args):
             if not args.head or not args.tail or not args.filtered_forward or not args.filtered_reverse:
                 logging.error("Targeted mode requires --head, --tail, --filtered_forward, and --filtered_reverse")
                 sys.exit(1)
-            
+
         sample_prefix = os.path.basename(args.head).split("_")[0] if args.head else "sample"
         left_flanking, right_flanking = extract_targeted_flanks_pyfastx(
             filtered_1_fastq=args.filtered_forward,
@@ -58,7 +99,6 @@ def run_is_mapping(args):
         )
     else:
         logging.info("Running in WGS mode...")
-        # Assume reads are provided as two paired files for simplicity, or we can use the first two elements.
         forward_read = args.reads[0]
         if args.forward_only or len(args.reads) == 1:
             reverse_read = None
@@ -76,9 +116,9 @@ def run_is_mapping(args):
             max_clip=args.max_clip,
             threads=args.threads
         )
-        
+
     logging.info("Flanking reads extracted. Proceeding to reference mapping.")
-    
+
     # BWA requires FASTA format. If user provided a GenBank file, convert it to FASTA.
     ref_fasta = args.reference
     if ref_fasta.endswith('.gbk') or ref_fasta.endswith('.gb') or ref_fasta.endswith('.gbff'):
@@ -88,16 +128,42 @@ def run_is_mapping(args):
         if not os.path.exists(ref_fasta):
             logging.info(f"Converting GenBank to FASTA: {ref_fasta}")
             Bio.SeqIO.convert(args.reference, "genbank", ref_fasta, "fasta")
-            
-    # Locate targets or primers file
-    # Resolve relative to PISE package root (parent of this file's directory), not the shell CWD
+
+    # ------------------------------------------------------------------
+    # Locate targets.fasta (registry + known-IS scan source).
+    # Priority: config targets_file > package config/targets.fasta > primers.fasta
+    # ------------------------------------------------------------------
     _pkg_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    targets_fasta = os.path.join(_pkg_root, "config", "targets.fasta")
+    cfg_targets = cfg_mapping.get('targets_file', None) or (
+        load_config(args.config).get('targets_file', None) if getattr(args, 'config', None) else None
+    )
+
+    if cfg_targets:
+        # Resolve relative to config file directory if not absolute
+        if not os.path.isabs(cfg_targets) and getattr(args, 'config', None):
+            cfg_targets = os.path.join(os.path.dirname(os.path.abspath(args.config)), cfg_targets)
+        targets_fasta = cfg_targets if os.path.exists(cfg_targets) else None
+    else:
+        targets_fasta = None
+
+    if not targets_fasta:
+        targets_fasta = os.path.join(_pkg_root, "config", "targets.fasta")
     if not os.path.exists(targets_fasta):
         targets_fasta = os.path.join(_pkg_root, "config", "primers.fasta")
     if not os.path.exists(targets_fasta):
-        logging.warning(f"Targets file {targets_fasta} not found. Known IS positions on reference will not be detected.")
+        logging.warning(f"Targets file not found. Known IS positions on reference will not be detected.")
         targets_fasta = None
+
+    # ------------------------------------------------------------------
+    # Auto-derive is_name from --queries filename in WGS mode
+    # ------------------------------------------------------------------
+    if not args.is_name and getattr(args, 'queries', None) and targets_fasta:
+        query_stem = os.path.basename(args.queries).rsplit('.', 1)[0]
+        registry = ISElementRegistry(targets_fasta)
+        _, derived = registry.resolve(query_stem)
+        if derived:
+            args.is_name = derived
+            logging.info(f"Auto-derived is_name='{derived}' from queries filename '{args.queries}'")
 
     left_bam, right_bam = map_to_ref_seq(
         ref_fasta=ref_fasta,
@@ -109,7 +175,7 @@ def run_is_mapping(args):
         threads=args.threads,
         min_mapq=args.min_mapq
     )
-    
+
     left_merged, right_merged = create_bed_files(
         left_bam=left_bam,
         right_bam=right_bam,
@@ -118,11 +184,11 @@ def run_is_mapping(args):
         cutoff=args.cutoff,
         merging=args.merging
     )
-    
+
     ref_base = os.path.basename(args.reference).rsplit('.', 1)[0]
     out_table = os.path.join(out_dir, f"{sample_prefix}__{ref_base}_table.tsv")
-    
-    create_typing_output(
+
+    known_is, unpaired_hits = create_typing_output(
         left_merged=left_merged,
         right_merged=right_merged,
         left_cov=os.path.join(tmp_dir, f"{sample_prefix}_left_{ref_base}_cov.bed"),
@@ -134,18 +200,29 @@ def run_is_mapping(args):
         is_length=args.is_length,
         flank_len=args.flank_len,
         targets_fasta=targets_fasta,
-        threads=args.threads
+        threads=args.threads,
+        is_name=args.is_name
     )
-    
+
     # Generate HTML report
     report_file = os.path.join(out_dir, f"{sample_prefix}__{ref_base}_report.html")
-    generate_report(out_table, report_file, reference_file=args.reference, cutoff=args.cutoff)
-    
+    generate_report(
+        out_table, report_file,
+        reference_file=args.reference,
+        cutoff=args.cutoff,
+        known_is=known_is,
+        unpaired_hits=unpaired_hits,
+        left_bam=left_bam,
+        right_bam=right_bam,
+    )
+
     if not getattr(args, 'temp', False):
         import shutil
         logging.info("Cleaning up temporary files...")
         shutil.rmtree(tmp_dir, ignore_errors=True)
     else:
         logging.info(f"Keeping temporary files in {tmp_dir}")
-        
+
     logging.info("is-mapping pipeline completed successfully!")
+
+

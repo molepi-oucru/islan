@@ -1,23 +1,44 @@
 # IS-Seq Pipeline Configuration File
 
-# Path to the primers database file
+# Path to the targets database file.
+# Used as the IS element registry source by ALL modules (is-mapping + pre-process).
+targets_file: "config/targets.fasta"
+
+# Path to the primers database file (used by pre-process for HEAD/TAIL filtering).
 primers_file: "config/primers.fasta"
 
 # Main pipeline output directory
 output_dir: "results_asv"
 
-# Preprocessing parameters
+# Preprocessing parameters (islan pre-process)
 preprocessing:
-  min_cov: 0.9
-  min_identity: 0.9
-  min_len: 20
-  index_i5: true
-  i5_mismatch: 2
-  len_actual_primer: 20 # Set to integer to enable partial match, e.g. 20
-  threads: 8 # Number of parallel processes to use for read filtering
-  qc: true # Run QC and demultiplexing step on forward reads (default: true)
+  min_cov: 0.9            # Minimum alignment coverage fraction for primer match
+  min_identity: 0.9       # Minimum alignment identity for primer match
+  min_len: 20             # Minimum read length after index trim (bp)
+  index_i5: true          # Trim 8 bp i5 index from forward reads
+  i5_mismatch: 2          # Hamming distance tolerance for i5 demultiplexing
+  len_actual_primer: 20   # Core prefix length for partial exact matching (bp); set to null to disable
+  threads: 8              # Parallel processes for read filtering
+  qc: true                # Run QC and demultiplexing step on forward reads
 
-# Alignment parameters (for future implementation)
+# IS Mapping parameters (islan is-mapping)
+is_mapping:
+  # IS element short name to target (e.g. ISKpn26).
+  # Restricts the known-IS reference scan to this element only.
+  # In WGS mode this is auto-derived from the --queries filename if left null.
+  # Leave null to scan all IS elements in targets_file.
+  is_name: null
+  cutoff: 6               # Minimum read depth to report an insertion site
+  merging: 100            # Bedtools merge distance for peak calling (bp)
+  is_length: 4000         # Max gap to pair endogenous IS flanks (bp)
+  min_mapq: 30            # Min mapping quality (0 retains multi-mappers; discards 0 < MAPQ < min_mapq)
+  flank_len: 300          # Flanking window around known IS boundaries (bp)
+  threads: 8              # Threads for BWA and samtools
+  # WGS mode only:
+  min_clip: 10            # Minimum soft-clip size to extract as flank (bp)
+  max_clip: 30            # Maximum soft-clip size to extract as flank (bp)
+
+# Alignment parameters (future use)
 alignment:
   threads: 4
   bwa_mem2_path: "bwa-mem2"

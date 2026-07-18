@@ -21,7 +21,7 @@ def load_known_indices(primers_path):
         logging.warning(f"Could not load known indices from {primers_path}: {e}")
     return known_indices
 
-def generate_qc_report(sample_name, output_dir, total_reads, polyn_reads, length_dist, quality_sums, quality_counts, category_counts, expected_category, primer_variations, index_i5):
+def generate_qc_report(sample_name, output_dir, total_reads, polyn_reads, length_dist, quality_sums, quality_counts, category_counts, expected_category, primer_variations, index_i5, all_short_names=None):
     os.makedirs(output_dir, exist_ok=True)
     report_path = os.path.join(output_dir, f"{sample_name}_Forward_QC_Report.html")
     
@@ -49,7 +49,9 @@ def generate_qc_report(sample_name, output_dir, total_reads, polyn_reads, length
     
     # 3. Index Frequencies
     if index_i5 and category_counts:
-        categories = ["IS1R", "ISAeme19", "ISKox3", "ISKpn26", "undetermined"]
+        if not all_short_names:
+            all_short_names = ["IS1R", "ISAeme19", "ISKox3", "ISKpn26"]
+        categories = all_short_names + ["undetermined"]
         counts = [category_counts[c] for c in categories]
         
         colors = []
@@ -125,11 +127,17 @@ def get_or_create_handle(category, sample_name, output_dir, file_handles, output
 def hamming_distance(s1, s2):
     return sum(c1 != c2 for c1, c2 in zip(s1, s2))
 
-def run_qc(fastq_path, sample_name, output_dir, primers_fasta_path, primers=None, index_i5=True, i5_mismatch=2):
+def run_qc(fastq_path, sample_name, output_dir, primers_fasta_path, primers=None, index_i5=True, i5_mismatch=2, all_short_names=None):
     """
     Runs QC and demultiplexes forward reads by index. Poly-N reads are dropped.
     Returns total_reads, polyn_reads, category_counts, and created output fastq files.
+
+    all_short_names: list of IS short names from ISElementRegistry (e.g. ['IS1R', 'ISKpn26']).
+                     If None, falls back to the four hard-coded names for backwards compatibility.
     """
+    # Ensure we always have a list to work with
+    if not all_short_names:
+        all_short_names = ["IS1R", "ISAeme19", "ISKox3", "ISKpn26"]
     # E.g. sample_name: "278-IS1R" -> expected_category: "IS1R"
     expected_category = sample_name.split('-')[-1]
     
@@ -142,13 +150,7 @@ def run_qc(fastq_path, sample_name, output_dir, primers_fasta_path, primers=None
     
     index_len = 8 if index_i5 else 0
     index_counts = Counter()
-    category_counts = Counter({
-        "IS1R": 0,
-        "ISAeme19": 0,
-        "ISKox3": 0,
-        "ISKpn26": 0,
-        "undetermined": 0
-    })
+    category_counts = Counter({n: 0 for n in all_short_names + ['undetermined']})
     
     # Load the known indices from primers.fasta
     known_indices = load_known_indices(primers_fasta_path) if index_i5 else {}
@@ -234,7 +236,9 @@ def run_qc(fastq_path, sample_name, output_dir, primers_fasta_path, primers=None
             
     # Generate report in qc_reports directory
     qc_dir = os.path.join(os.path.dirname(output_dir), "qc_reports")
-    generate_qc_report(sample_name, qc_dir, total_reads, polyn_reads, 
-                        length_dist, quality_sums, quality_counts, category_counts, expected_category, primer_variations, index_i5)
+    generate_qc_report(sample_name, qc_dir, total_reads, polyn_reads,
+                        length_dist, quality_sums, quality_counts, category_counts,
+                        expected_category, primer_variations, index_i5,
+                        all_short_names=all_short_names)
                        
     return total_reads, polyn_reads, category_counts, output_files

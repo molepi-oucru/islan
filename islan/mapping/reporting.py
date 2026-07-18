@@ -222,10 +222,13 @@ def get_flanking_features(x, y, features):
         
     return left_feat, right_feat
 
-def scan_known_is_positions(targets_fasta, ref_fasta, threads, tmp_dir):
+def scan_known_is_positions(targets_fasta, ref_fasta, threads, tmp_dir, is_name=None):
     """
     Scan the reference genome for the full sequence of the IS elements.
     Returns a list of dictionaries: [{'chr': chrom, 'start': start, 'end': end, 'name': name, 'strand': strand}, ...]
+
+    If is_name is provided (e.g. 'ISKpn26'), only :FULL sequences whose header
+    contains that name are queried, so the count reflects only the targeted IS element.
     """
     known_is = []
     if not targets_fasta or not os.path.exists(targets_fasta):
@@ -236,6 +239,12 @@ def scan_known_is_positions(targets_fasta, ref_fasta, threads, tmp_dir):
     for record in SeqIO.parse(targets_fasta, "fasta"):
         # Header format: >ST16:IS1R_IS1:FULL or similar
         if ":FULL" in record.id:
+            # If is_name is specified, only include matching IS elements
+            if is_name:
+                # Extract the IS name portion (e.g. 'IS1R' from 'ST16:IS1R_IS1:FULL')
+                # Match against is_name (e.g. 'ISKpn26' matches 'ST16:ISKpn26_IS5:FULL')
+                if is_name not in record.id:
+                    continue
             full_seqs[record.id] = record
 
     if not full_seqs:
@@ -343,7 +352,7 @@ def scan_known_is_positions(targets_fasta, ref_fasta, threads, tmp_dir):
             logging.info(f"Identified {len(known_is)} known IS element copies on the reference genome using BWA MEM fallback.")
     return known_is
 
-def parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_length, flank_len, targets_fasta, ref_fasta, threads):
+def parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_length, flank_len, targets_fasta, ref_fasta, threads, is_name=None):
     """
     Parse the bedtools output to find paired hits, chimeras, and single flanks.
     Uses reference target guide scan and coordinate overlap matching rules.
@@ -379,7 +388,7 @@ def parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_
 
     # Scan the reference genome for known IS positions
     tmp_dir = os.path.dirname(left_cov)
-    known_is = scan_known_is_positions(targets_fasta, ref_fasta, threads, tmp_dir)
+    known_is = scan_known_is_positions(targets_fasta, ref_fasta, threads, tmp_dir, is_name=is_name)
 
     total_known = len(known_is)
     detected_known = 0
@@ -754,8 +763,10 @@ def parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_
         elif call_val == 'Novel Pair (TSD)':
             call_val = 'novel (TSD)'
             
-        if gap_val != 'N/A' and isinstance(gap_val, (int, float)) and gap_val < -MAX_TSD_OVERLAP:
-            call_val = f"{call_val}*"
+        # * suffix is only meaningful for novel (TSD): marks cases where flanking peaks
+        # overlap by > MAX_TSD_OVERLAP bp, indicating a real insertion with no empty-locus gap.
+        if call_val == 'novel (TSD)' and gap_val != 'N/A' and isinstance(gap_val, (int, float)) and gap_val < -MAX_TSD_OVERLAP:
+            call_val = 'novel (TSD)*'
             
         contig = lp['chr'] if lp else rp['chr']
         
@@ -796,7 +807,7 @@ def parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_
         return (hit['contig'], pos)
         
     final_hits.sort(key=get_sort_key)
-    return final_hits
+    return final_hits, known_is
 
 def get_read_count(bam_path, chrom, start, end):
     if not bam_path or not os.path.exists(bam_path):
@@ -872,7 +883,7 @@ def calculate_detailed_stats(cov_data, chrom, start, end, bam_path):
         'read_count': read_count
     }
 
-def create_typing_output(left_merged, right_merged, left_cov, right_cov, ref_fasta, out_file, left_bam=None, right_bam=None, is_length=4000, flank_len=300, targets_fasta="config/targets.fasta", threads=1):
+def create_typing_output(left_merged, right_merged, left_cov, right_cov, ref_fasta, out_file, left_bam=None, right_bam=None, is_length=4000, flank_len=300, targets_fasta="config/targets.fasta", threads=1, is_name=None):
     """
     Generate final summary table.
     """
@@ -885,7 +896,7 @@ def create_typing_output(left_merged, right_merged, left_cov, right_cov, ref_fas
     else:
         logging.warning("Reference is not GenBank. Gene annotation will be skipped.")
         
-    hits = parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_length, flank_len, targets_fasta, ref_fasta, threads)
+    hits, known_is = parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_length, flank_len, targets_fasta, ref_fasta, threads, is_name=is_name)
     
     # Separate into main table and unpaired singletons
     main_hits = []
@@ -994,3 +1005,7 @@ def create_typing_output(left_merged, right_merged, left_cov, right_cov, ref_fas
             writer.writerow(row)
             
     logging.info(f"Unpaired singletons successfully written to {out_unpaired}.")
+
+    # Return BLASTN positions and singleton hits for downstream HTML report
+    return known_is, unpaired_hits
+

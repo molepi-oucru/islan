@@ -54,6 +54,7 @@ def main():
 
     # Subparser: is-mapping
     ismapper_parser = subparsers.add_parser("is-mapping", help="Identify IS insertion sites (adapted from ISMapper)")
+    ismapper_parser.add_argument("-c", "--config", default=None, help="Path to pipeline config YAML. CLI args override config values.")
     ismapper_parser.add_argument("--reads", nargs='+', help="Input reads (WGS mode)")
     ismapper_parser.add_argument("--queries", help="IS query FASTA (WGS mode)")
     ismapper_parser.add_argument("--reference", required=True, help="Reference genome FASTA/GenBank")
@@ -64,15 +65,16 @@ def main():
     ismapper_parser.add_argument("--filtered_reverse", help="Filtered reverse reads _2.fastq.gz (Targeted mode)")
     ismapper_parser.add_argument("--forward-only", "--forward_only", dest="forward_only", action="store_true", help="Run analysis with forward reads only (single-end)")
     ismapper_parser.add_argument("-o", "--output_dir", default=DEFAULT_OUTPUT_DIR, help="Output directory")
-    ismapper_parser.add_argument("-t", "--threads", type=int, default=DEFAULT_THREADS, help="Number of threads")
-    ismapper_parser.add_argument("--min_clip", type=int, default=DEFAULT_MIN_CLIP, help="Minimum soft-clip size (WGS)")
-    ismapper_parser.add_argument("--max_clip", type=int, default=DEFAULT_MAX_CLIP, help="Maximum soft-clip size (WGS)")
-    ismapper_parser.add_argument("--cutoff", type=int, default=DEFAULT_CUTOFF, help="Minimum depth cutoff for reporting")
-    ismapper_parser.add_argument("--merging", type=int, default=DEFAULT_MERGING, help="Merge distance for bedtools")
-    ismapper_parser.add_argument("--is_length", type=int, default=DEFAULT_IS_LENGTH, help=f"Max gap distance to pair endogenous IS flanks (default {DEFAULT_IS_LENGTH})")
-    ismapper_parser.add_argument("--min-mapq", "--min_mapq", dest="min_mapq", type=int, default=DEFAULT_MIN_MAPQ, help="Minimum mapping quality to filter reads (retains MAPQ == 0 multi-mappers; discards 0 < MAPQ < min_mapq)")
-    ismapper_parser.add_argument("--flank-len", "--flank_len", dest="flank_len", type=int, default=DEFAULT_FLANK_LEN, help=f"Flanking window around known IS element boundaries (default {DEFAULT_FLANK_LEN} bp)")
+    ismapper_parser.add_argument("-t", "--threads", type=int, default=None, help="Number of threads")
+    ismapper_parser.add_argument("--min_clip", type=int, default=None, help="Minimum soft-clip size (WGS)")
+    ismapper_parser.add_argument("--max_clip", type=int, default=None, help="Maximum soft-clip size (WGS)")
+    ismapper_parser.add_argument("--cutoff", type=int, default=None, help="Minimum depth cutoff for reporting")
+    ismapper_parser.add_argument("--merging", type=int, default=None, help="Merge distance for bedtools")
+    ismapper_parser.add_argument("--is_length", type=int, default=None, help=f"Max gap distance to pair endogenous IS flanks (default {DEFAULT_IS_LENGTH})")
+    ismapper_parser.add_argument("--min-mapq", "--min_mapq", dest="min_mapq", type=int, default=None, help="Minimum mapping quality to filter reads (retains MAPQ == 0 multi-mappers; discards 0 < MAPQ < min_mapq)")
+    ismapper_parser.add_argument("--flank-len", "--flank_len", dest="flank_len", type=int, default=None, help=f"Flanking window around known IS element boundaries (default {DEFAULT_FLANK_LEN} bp)")
     ismapper_parser.add_argument("--temp", action="store_true", help="Keep the temporary files directory after successful completion (default: remove)")
+    ismapper_parser.add_argument("--is_name", default=None, help="IS element name to filter known positions (e.g. ISKpn26). If not set, auto-derived from --queries filename (WGS mode) or all IS elements are used.")
 
     args = parser.parse_args()
 
