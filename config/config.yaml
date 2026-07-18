@@ -19,6 +19,5 @@ preprocessing:
 
 # Alignment parameters (for future implementation)
 alignment:
-  reference_genome: "data/reference/genome.fasta"
   threads: 4
   bwa_mem2_path: "bwa-mem2"

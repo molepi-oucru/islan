@@ -68,7 +68,7 @@ def load_reference_seq(ref_file):
     if not ref_file or not os.path.exists(ref_file):
         return ref_seqs
     try:
-        if ref_file.endswith('.gbk') or ref_file.endswith('.gb'):
+        if ref_file.endswith('.gbk') or ref_file.endswith('.gb') or ref_file.endswith('.gbff'):
             for record in SeqIO.parse(ref_file, "genbank"):
                 ref_seqs[record.id] = str(record.seq)
                 ref_seqs[record.name] = str(record.seq)
@@ -96,7 +96,7 @@ def load_genbank_features(ref_file):
     features_dict = {}
     if not ref_file or not os.path.exists(ref_file):
         return features_dict
-    if not (ref_file.endswith('.gbk') or ref_file.endswith('.gb')):
+    if not (ref_file.endswith('.gbk') or ref_file.endswith('.gb') or ref_file.endswith('.gbff')):
         return features_dict
     try:
         for record in SeqIO.parse(ref_file, "genbank"):

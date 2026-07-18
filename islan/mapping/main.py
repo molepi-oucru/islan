@@ -81,7 +81,7 @@ def run_is_mapping(args):
     
     # BWA requires FASTA format. If user provided a GenBank file, convert it to FASTA.
     ref_fasta = args.reference
-    if ref_fasta.endswith('.gbk') or ref_fasta.endswith('.gb'):
+    if ref_fasta.endswith('.gbk') or ref_fasta.endswith('.gb') or ref_fasta.endswith('.gbff'):
         import Bio.SeqIO
         ref_base_name = os.path.basename(args.reference).rsplit('.', 1)[0]
         ref_fasta = os.path.join(tmp_dir, ref_base_name + '.fasta')
@@ -90,9 +90,14 @@ def run_is_mapping(args):
             Bio.SeqIO.convert(args.reference, "genbank", ref_fasta, "fasta")
             
     # Locate targets or primers file
-    targets_fasta = os.path.abspath("config/targets.fasta")
+    # Resolve relative to PISE package root (parent of this file's directory), not the shell CWD
+    _pkg_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    targets_fasta = os.path.join(_pkg_root, "config", "targets.fasta")
     if not os.path.exists(targets_fasta):
-        targets_fasta = os.path.abspath("config/primers.fasta")
+        targets_fasta = os.path.join(_pkg_root, "config", "primers.fasta")
+    if not os.path.exists(targets_fasta):
+        logging.warning(f"Targets file {targets_fasta} not found. Known IS positions on reference will not be detected.")
+        targets_fasta = None
 
     left_bam, right_bam = map_to_ref_seq(
         ref_fasta=ref_fasta,

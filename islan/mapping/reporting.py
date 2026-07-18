@@ -228,7 +228,7 @@ def scan_known_is_positions(targets_fasta, ref_fasta, threads, tmp_dir):
     Returns a list of dictionaries: [{'chr': chrom, 'start': start, 'end': end, 'name': name, 'strand': strand}, ...]
     """
     known_is = []
-    if not os.path.exists(targets_fasta):
+    if not targets_fasta or not os.path.exists(targets_fasta):
         logging.warning(f"Targets file {targets_fasta} not found. Skipping reference scan.")
         return known_is
 
@@ -250,7 +250,7 @@ def scan_known_is_positions(targets_fasta, ref_fasta, threads, tmp_dir):
 
     # Resolve ref_fasta to FASTA format if it is a GenBank file
     mapping_ref = ref_fasta
-    if ref_fasta.endswith('.gb') or ref_fasta.endswith('.gbk'):
+    if ref_fasta.endswith('.gb') or ref_fasta.endswith('.gbk') or ref_fasta.endswith('.gbff'):
         ref_base_name = os.path.basename(ref_fasta).rsplit('.', 1)[0]
         converted_fa = os.path.join(tmp_dir, ref_base_name + '.fasta')
         if os.path.exists(converted_fa):
@@ -880,7 +880,7 @@ def create_typing_output(left_merged, right_merged, left_cov, right_cov, ref_fas
     
     # Check if reference is genbank
     features = []
-    if ref_fasta.endswith('.gbk') or ref_fasta.endswith('.gb'):
+    if ref_fasta.endswith('.gbk') or ref_fasta.endswith('.gb') or ref_fasta.endswith('.gbff'):
         features = parse_genbank(ref_fasta)
     else:
         logging.warning("Reference is not GenBank. Gene annotation will be skipped.")
