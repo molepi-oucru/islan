@@ -114,18 +114,18 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
     final_output_dir = os.path.abspath(output_dir if output_dir is not None else out_dir_cfg)
     os.makedirs(final_output_dir, exist_ok=True)
     
-    # Configure logging
+    # Configure logging immediately
     log_file = os.path.join(final_output_dir, "islan.log")
     class FlushingFileHandler(logging.FileHandler):
         def emit(self, record):
             super().emit(record)
             self.flush()
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(message)s',
-        handlers=[logging.StreamHandler(sys.stdout), FlushingFileHandler(log_file, mode='w')]
-    )
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    file_h = FlushingFileHandler(log_file, mode='w')
+    file_h.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
+    root_logger.addHandler(file_h)
 
     preprocess_cfg = config.get("preprocessing", {})
     min_cov = preprocess_cfg.get("min_cov", 0.98)
