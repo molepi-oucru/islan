@@ -125,7 +125,7 @@ def run_is_mapping(args):
         import Bio.SeqIO
         ref_base_name = os.path.basename(args.reference).rsplit('.', 1)[0]
         ref_fasta = os.path.join(tmp_dir, ref_base_name + '.fasta')
-        if not os.path.exists(ref_fasta):
+        if not os.path.exists(ref_fasta) or os.path.getsize(ref_fasta) == 0:
             logging.info(f"Converting GenBank to FASTA: {ref_fasta}")
             Bio.SeqIO.convert(args.reference, "genbank", ref_fasta, "fasta")
 

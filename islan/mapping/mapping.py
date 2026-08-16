@@ -9,6 +9,8 @@ import subprocess
 import gzip
 import pyfastx
 from Bio.Seq import Seq
+from Bio import SeqIO
+import pysam
 
 def check_command(cmd_name):
     """Check if command exists and return the actual command to use (bwa-mem2 vs bwa)"""
@@ -225,14 +227,66 @@ def map_to_ref_seq(ref_fasta, sample_prefix, left_flanking, right_flanking, tmp_
     left_sorted = os.path.join(out_folder, f"{sample_prefix}_left_{ref_base}.sorted.bam")
     right_sorted = os.path.join(out_folder, f"{sample_prefix}_right_{ref_base}.sorted.bam")
     
+    import subprocess
+    is_legacy_samtools = False
+    try:
+        res = subprocess.run(["samtools", "sort"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        output = res.stderr or res.stdout
+        if "-o FILE" not in output and "output file name" not in output:
+            is_legacy_samtools = True
+    except Exception:
+        pass
+
+    # Ensure reference FASTA is indexed with faidx for BAM header safety
+    if not os.path.exists(f"{ref_fasta}.fai"):
+        try:
+            run_command(f"samtools faidx {ref_fasta}", shell=True)
+        except Exception:
+            pass
+            
+    fai_opt = f"-t {ref_fasta}.fai" if os.path.exists(f"{ref_fasta}.fai") else ""
+
+    if is_legacy_samtools:
+        left_unsorted = left_sorted.replace(".sorted.bam", "_unsorted.bam")
+        right_unsorted = right_sorted.replace(".sorted.bam", "_unsorted.bam")
+        left_prefix = left_sorted.replace(".sorted.bam", "")
+        right_prefix = right_sorted.replace(".sorted.bam", "")
+        left_cmd = f"{bwa_cmd} mem -t {threads} {ref_fasta} {left_flanking} | awk '$5 == 0 || $5 >= {min_mapq} || $1 ~ /^@/' | samtools view -bS - > {left_unsorted} && samtools sort -@ {threads} {left_unsorted} {left_prefix} && mv {left_prefix}.bam {left_sorted} && rm -f {left_unsorted}"
+        right_cmd = f"{bwa_cmd} mem -t {threads} {ref_fasta} {right_flanking} | awk '$5 == 0 || $5 >= {min_mapq} || $1 ~ /^@/' | samtools view -bS - > {right_unsorted} && samtools sort -@ {threads} {right_unsorted} {right_prefix} && mv {right_prefix}.bam {right_sorted} && rm -f {right_unsorted}"
+    else:
+        left_cmd = f"{bwa_cmd} mem -t {threads} {ref_fasta} {left_flanking} | samtools view -h | awk '$5 == 0 || $5 >= {min_mapq} || $1 ~ /^@/' | samtools sort -@ {threads} -o {left_sorted} -"
+        right_cmd = f"{bwa_cmd} mem -t {threads} {ref_fasta} {right_flanking} | samtools view -h | awk '$5 == 0 || $5 >= {min_mapq} || $1 ~ /^@/' | samtools sort -@ {threads} -o {right_sorted} -"
+
+    def _run_or_create_empty_bam(fastq_path, sorted_bam_path, ref_fasta_path, cmd_str):
+        if not os.path.exists(fastq_path) or os.path.getsize(fastq_path) == 0:
+            logging.info(f"Flanking FASTQ {fastq_path} is empty. Creating empty BAM file with reference header...")
+            try:
+                ref_records = list(SeqIO.parse(ref_fasta_path, "fasta"))
+                header = {
+                    'HD': {'VN': '1.0', 'SO': 'coordinate'},
+                    'SQ': [{'SN': rec.id, 'LN': len(rec.seq)} for rec in ref_records]
+                }
+                with pysam.AlignmentFile(sorted_bam_path, "wb", header=header) as empty_bam:
+                    pass
+            except Exception as e:
+                logging.warning(f"Could not write empty BAM with pysam: {e}. Running fallback command.")
+                run_command(cmd_str, shell=True)
+        else:
+            run_command(cmd_str, shell=True)
+
     logging.info(f"Mapping left flanks to reference and sorting...")
-    run_command(f"{bwa_cmd} mem -t {threads} {ref_fasta} {left_flanking} | samtools view -h | awk '$5 == 0 || $5 >= {min_mapq} || $1 ~ /^@/' | samtools sort -@ {threads} -o {left_sorted}", shell=True)
+    _run_or_create_empty_bam(left_flanking, left_sorted, ref_fasta, left_cmd)
     logging.info(f"Mapping right flanks to reference and sorting...")
-    run_command(f"{bwa_cmd} mem -t {threads} {ref_fasta} {right_flanking} | samtools view -h | awk '$5 == 0 || $5 >= {min_mapq} || $1 ~ /^@/' | samtools sort -@ {threads} -o {right_sorted}", shell=True)
+    _run_or_create_empty_bam(right_flanking, right_sorted, ref_fasta, right_cmd)
     
     # Index BAMs
-    run_command(f"samtools index -@ {threads} {left_sorted}", shell=True)
-    run_command(f"samtools index -@ {threads} {right_sorted}", shell=True)
+    logging.info(f"Indexing BAM files...")
+    if is_legacy_samtools:
+        run_command(f"samtools index {left_sorted}", shell=True)
+        run_command(f"samtools index {right_sorted}", shell=True)
+    else:
+        run_command(f"samtools index -@ {threads} {left_sorted}", shell=True)
+        run_command(f"samtools index -@ {threads} {right_sorted}", shell=True)
     
     return left_sorted, right_sorted
 
