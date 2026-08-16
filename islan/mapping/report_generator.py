@@ -260,14 +260,29 @@ def generate_combined_alignment_plotly(left_bam, right_bam, chrom, l_start, l_en
     for qname, reads in templates.items():
         min_start = min(r["start"] for r in reads)
         max_end = max(r["end"] for r in reads)
+        flank_type = reads[0]["flank"] if reads else "head"
         template_list.append({
             "query_name": qname,
             "reads": reads,
             "min_start": min_start,
-            "max_end": max_end
+            "max_end": max_end,
+            "flank": flank_type
         })
         
-    template_list.sort(key=lambda t: t["min_start"])
+    # Sort templates: Group by flank type (HEAD vs TAIL), then prioritize junction-defining reads (R1)
+    def is_junction_template(t):
+        for r in t["reads"]:
+            if abs(r["start"] - l_start) <= 50 or abs(r["end"] - l_end) <= 50:
+                return True
+            if abs(r["start"] - r_start) <= 50 or abs(r["end"] - r_end) <= 50:
+                return True
+        return False
+
+    template_list.sort(key=lambda t: (
+        0 if t["flank"] == l_label else 1,
+        0 if is_junction_template(t) else 1,
+        t["min_start"]
+    ))
     
     # Downsample templates to MAX_ALIGNMENT_READS (100)
     max_templates = MAX_ALIGNMENT_READS
@@ -340,6 +355,22 @@ def generate_combined_alignment_plotly(left_bam, right_bam, chrom, l_start, l_en
         specs=[[{"secondary_y": True}], [{"secondary_y": False}], [{"secondary_y": False}]]
     )
     
+    # Add vertical highlight for TSD / insertion site overlap
+    tsd_candidates = [l_start, l_end, r_start, r_end]
+    min_j = min(l_start, r_start)
+    max_j = max(l_start, r_start)
+    if abs(min_j - max_j) <= 100:
+        fig.add_vrect(
+            x0=min_j, x1=max_j if max_j != min_j else min_j + 5,
+            fillcolor="rgba(251, 191, 36, 0.22)",
+            line_color="rgba(217, 119, 6, 0.6)",
+            line_width=1,
+            line_dash="dot",
+            annotation_text="TSD Zone",
+            annotation_position="top left",
+            row=1, col=1
+        )
+    
     # Plot Left Flank Coverage (HEAD in F insertions, TAIL in R insertions)
     if l_x:
         l_cov_name = "HEAD Coverage" if l_label == "head" else "TAIL Coverage"
@@ -410,46 +441,52 @@ def generate_combined_alignment_plotly(left_bam, right_bam, chrom, l_start, l_en
                 row=2, col=1
             )
             
-    # Plot Stacked Reads
+    # Plot Stacked Reads (Fragment-Centric Overlay View)
     for temp in stacked_templates:
         y = temp["row"]
         reads = temp["reads"]
+        min_start = temp["min_start"]
+        max_end = temp["max_end"]
         
-        # Link line if paired
-        if len(reads) >= 2:
-            r1, r2 = reads[0], reads[1]
-            gap_start = min(r1["end"], r2["end"])
-            gap_end = max(r1["start"], r2["start"])
-            if gap_start < gap_end:
-                fig.add_trace(
-                    go.Scatter(
-                        x=[gap_start, gap_end],
-                        y=[y, y],
-                        mode="lines",
-                        line=dict(color="rgba(160, 160, 160, 0.55)", width=1),
-                        showlegend=False,
-                        hoverinfo="skip"
-                    ),
-                    row=3, col=1
-                )
+        # 1. Draw Full DNA Fragment Span as a thin background line
+        fig.add_trace(
+            go.Scatter(
+                x=[min_start, max_end],
+                y=[y, y],
+                mode="lines",
+                line=dict(color="rgba(156, 163, 175, 0.45)", width=2),
+                showlegend=False,
+                hoverinfo="skip"
+            ),
+            row=3, col=1
+        )
                 
-        # Draw reads
+        # 2. Draw reads overlaid on top of the fragment line
         for read in reads:
-            # Color-code based on biological identity: head reads = Blue palette, tail reads = Red palette
+            # Determine if this read is a junction-defining Read 1 (starts or ends near peak junction)
+            is_j_read = (abs(read["start"] - l_start) <= 50 or abs(read["end"] - l_end) <= 50 or 
+                          abs(read["start"] - r_start) <= 50 or abs(read["end"] - r_end) <= 50)
+            
+            # Color-code based on read identity: Junction Read 1 = Solid Dark Color, Flank Read 2 = Light Color
             if read["flank"] == "head":
-                read_color = HEAD_READ_REVERSE_COLOR if read["is_reverse"] else HEAD_READ_FORWARD_COLOR
+                read_color = HEAD_READ_FORWARD_COLOR if is_j_read else HEAD_READ_REVERSE_COLOR
             else:
-                read_color = TAIL_READ_REVERSE_COLOR if read["is_reverse"] else TAIL_READ_FORWARD_COLOR
+                read_color = TAIL_READ_FORWARD_COLOR if is_j_read else TAIL_READ_REVERSE_COLOR
                 
+            read_width = 9 if is_j_read else 5
+            read_file_str = "_1 (Forward Read)" if is_j_read else "_2 (Reverse Mate)"
+            read_type_str = "IS Junction Boundary" if is_j_read else "Extended Flank"
+            strand_str = "(+) Forward Strand" if not read["is_reverse"] else "(-) Reverse Strand"
+            
             fig.add_trace(
                 go.Scatter(
                     x=[read["start"], read["end"]],
                     y=[y, y],
                     mode="lines",
-                    line=dict(color=read_color, width=8),
+                    line=dict(color=read_color, width=read_width),
                     showlegend=False,
                     hoverinfo="text",
-                    hovertext=f"Read ({read['flank'].capitalize()}): {temp['query_name']}<br>Range: {read['start']}-{read['end']}<br>Strand: {'Reverse' if read['is_reverse'] else 'Forward'}"
+                    hovertext=f"Read ({read['flank'].capitalize()}): {temp['query_name']}<br>Read File: <b>{read_file_str}</b><br>Type: {read_type_str}<br>Range: {read['start']}-{read['end']}<br>Genomic Strand: {strand_str}"
                 ),
                 row=3, col=1
             )
