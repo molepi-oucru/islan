@@ -2,33 +2,6 @@
 
 A modular Python package and command-line pipeline for processing and analyzing Insertion Sequence Sequencing (IS-Seq) reads.
 
-## Repository Layout
-```
-IS-SEQ/PISE/
-├── .context/               # AI Agent context directory
-│   ├── algorithms.md
-│   ├── architecture.md
-│   ├── commands.md
-│   ├── README.md
-│   └── ...
-├── config/                 # Configurations templates
-│   ├── config.yaml         # Configuration file
-│   └── primers.fasta       # Primers database
-├── islan/                  # Core Python package
-│   ├── __init__.py
-│   ├── main.py             # Main orchestrator entry point
-│   ├── qc.py               # Quality Control & demultiplexing logic
-│   ├── filter_reads.py     # Parallelized read filtering algorithm
-│   ├── extract_pairs.py    # Deferred matching reverse reads extraction
-│   └── split_fastq.py      # Utility to split FASTQ files
-├── tests/                  # Automated tests
-│   └── test_preprocess.py  # Preprocessing unit test
-├── environment.yaml        # Conda environment definition
-├── pyproject.toml          # PEP 517 build configuration
-├── setup.py                # Legacy setup compatibility file
-└── README.md               # User manual (this file)
-```
-
 ## Setup & Installation
 
 ### Option A: Using Conda & Mamba (Recommended - Fully Isolated)
@@ -70,7 +43,6 @@ If you already have the required command-line dependencies (`bwa`, `bwa-mem2`, `
    uv run islan ...
    ```
 
-
 ## Running the Pipeline
 
 The pipeline uses a modular subcommand-based command line interface:
@@ -101,12 +73,6 @@ islan pre-process \
 * Samples with expected index reads < 30% of total non-poly-N reads are classified as "Index failure" and automatically skipped in the downstream filtering.
 * Valid samples are trimmed by 8 bp, length-filtered with `MIN_LEN_FORWARD`, and split into HEAD/TAIL files based on local alignment match.
 * The processing statistics and classifications are saved to `islan_summary.tsv` in the output directory.
-
-### 2. ASV Analysis (`islan asv-analysis`)
-Runs Amplicon Sequence Variant analysis:
-```bash
-islan asv-analysis --config config/config.yaml
-```
 
 ### 3. Extracting Reverse Reads (`islan pairing`)
 Extract the reverse reads matching the filtered forward reads or a list of read IDs:
