@@ -7,25 +7,7 @@ from functools import partial
 from Bio import SeqIO
 from Bio.Seq import Seq
 from islan.constants import BATCH_SIZE
-
-def load_primers(fasta_file_path, target_is_element):
-    primers = {}
-    try:
-        with open(fasta_file_path, "r") as handle:
-            for record in SeqIO.parse(handle, "fasta"):
-                parts = record.id.split(':')
-                if len(parts) >= 2 and parts[1] == target_is_element:
-                    if ":HEAD" in record.id:
-                        primers['HEAD'] = str(Seq(record.seq).reverse_complement())
-                    elif ":TAIL" in record.id:
-                        primers['TAIL'] = str(record.seq)
-    except FileNotFoundError:
-        logging.error(f"Primer FASTA file not found at {fasta_file_path}")
-        sys.exit(1)
-    except Exception as e:
-        logging.error(f"An error occurred while loading primers: {e}")
-        sys.exit(1)
-    return primers
+from islan.utils import load_primers
 
 def process_batch_worker(batch_data, primers, min_cov, min_identity, min_len, index_len, min_len_forward, expected_index_seq=None, i5_mismatch=2, len_actual_primer=None):
     from Bio.Align import PairwiseAligner

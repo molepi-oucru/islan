@@ -42,10 +42,6 @@ def main():
     preprocess_parser.add_argument("--min_len", type=int, default=None, help="Minimum remaining length threshold for primer matching")
     preprocess_parser.add_argument("-o", "--output_dir", default=None, help="Main pipeline output directory")
 
-    # Subparser: asv-analysis
-    asv_parser = subparsers.add_parser("asv-analysis", help="Run ASV analysis (placeholder)")
-    asv_parser.add_argument("-c", "--config", default=None, help="Path to pipeline configuration YAML file")
-
     # Subparser: pairing
     pairing_parser = subparsers.add_parser("pairing", help="Extract reverse reads matching forward reads or ID list")
     pairing_parser.add_argument("-f", "--forward", required=True, help="Filtered forward FASTQ (.gz) or ID text file")
@@ -77,10 +73,6 @@ def main():
     ismapper_parser.add_argument("--is_name", default=None, help="IS element name to filter known positions (e.g. ISKpn26). If not set, auto-derived from --queries filename (WGS mode) or all IS elements are used.")
 
     args = parser.parse_args()
-
-    if args.subcommand == "asv-analysis":
-        print("ASV-analysis subcommand placeholder. Detailed implementation not specified.")
-        sys.exit(0)
 
     if args.subcommand == "pairing":
         from islan.extract_pairs import extract_pairs
