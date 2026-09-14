@@ -3,6 +3,7 @@
 # Preprocessing and filtering constants
 INDEX_LEN = 8
 BATCH_SIZE = 5000
+DEFAULT_FULL_OVERLAP_FRACTION = 0.9
 
 # Alignment viewer constants
 MAX_ALIGNMENT_READS = 100
@@ -49,7 +50,6 @@ DEFAULT_THREADS = 1
 
 # Exhaustive ordered list of detection classes for the HTML summary table.
 # Tandem classes are intentionally omitted (rare, not surfaced to end users).
-# 'Left-Right Imbalance Depth' is the display name for 'Off-Target Amplicon (Noise)'.
 ALL_REPORT_CALL_CLASSES = [
     'known',
     'novel',
@@ -57,7 +57,7 @@ ALL_REPORT_CALL_CLASSES = [
     'novel (TSD)*',            # negative gap > MAX_TSD_OVERLAP (possible false positive)
     'HEAD-only',
     'TAIL-only',
-    'Left-Right Imbalance Depth',  # display-only rename of 'Off-Target Amplicon (Noise)'
+    'Full Flank Overlap',
 ]
 
 

@@ -35,13 +35,15 @@ from islan.constants import (
     GENE_FORWARD_COLOR,
     GENE_REVERSE_COLOR,
     MAX_TSD_OVERLAP,
+    DEFAULT_FULL_OVERLAP_FRACTION,
     ALL_REPORT_CALL_CLASSES,
 )
 
 # Display-name mapping: maps internal call strings (as written to TSV) to
 # human-readable labels shown only in the HTML report.
 _DISPLAY_CLASS_NAMES = {
-    'Off-Target Amplicon (Noise)': 'Left-Right Imbalance Depth',
+    'Off-Target Amplicon (Noise)': 'Full Flank Overlap',
+    'Full Flank Overlap': 'Full Flank Overlap',
 }
 
 def _display_call(call_str):
@@ -1276,9 +1278,12 @@ def generate_report(
   <h2>1 · Summary</h2>
   {summary_html}
   <div class="fp-note">
+    <strong>Note on Full Flank Overlap calls:</strong> detected when a 5&apos; (HEAD) peak and a 3&apos; (TAIL) peak on the same chromosome overlap almost completely (overlap length &ge; <strong>{int(DEFAULT_FULL_OVERLAP_FRACTION * 100)}%</strong> of peak length).
+  </div>
+  <div class="fp-note">
     <strong>Note on * calls:</strong> calls appended with <strong>*</strong> indicate
     cases where left and right flanking peaks overlap by more than <strong>{MAX_TSD_OVERLAP} bp</strong>
-    — this is a stronger signal for a real insertion (no empty-locus gap).
+    (excessive overlap exceeding standard TSD length).
   </div>
 
   <!-- ═══ SECTION 2: Known IS Loci ═══ -->

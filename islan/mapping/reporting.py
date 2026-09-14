@@ -7,7 +7,11 @@ import logging
 from Bio import SeqIO
 
 import bisect
-from islan.constants import MAX_PAIRING_DISTANCE, MAX_TSD_OVERLAP
+from islan.constants import (
+    MAX_PAIRING_DISTANCE,
+    MAX_TSD_OVERLAP,
+    DEFAULT_FULL_OVERLAP_FRACTION
+)
 
 def parse_genbank(gbk_file, qualifier='product'):
     """
@@ -174,7 +178,7 @@ def is_full_overlap(p1, p2):
         return False
     len1 = p1['end'] - p1['start']
     len2 = p2['end'] - p2['start']
-    return ov >= min(len1, len2) * 0.9
+    return ov >= min(len1, len2) * DEFAULT_FULL_OVERLAP_FRACTION
 
 def get_flanking_features(x, y, features):
     """
@@ -366,25 +370,6 @@ def parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_
         p['paired'] = False
         
     hits = []
-    
-    # 1. Full-Overlap Artifact Filtering (Chimeras)
-    for l_peak in left_peaks:
-        for r_peak in right_peaks:
-            if l_peak['chr'] != r_peak['chr']: continue
-            
-            # Check overlap
-            if is_full_overlap(l_peak, r_peak):
-                ratio = max(l_peak['mean'], r_peak['mean']) / max(0.001, min(l_peak['mean'], r_peak['mean']))
-                if ratio > 5.0:
-                    # Chimera
-                    if l_peak['mean'] < r_peak['mean']:
-                        l_peak['chimera'] = True
-                    else:
-                        r_peak['chimera'] = True
-                            
-    # Filter chimeras out of the active pools
-    left_peaks = [p for p in left_peaks if not p['chimera']]
-    right_peaks = [p for p in right_peaks if not p['chimera']]
 
     # Scan the reference genome for known IS positions
     tmp_dir = os.path.dirname(left_cov)
@@ -584,7 +569,7 @@ def parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_
             lp['paired'] = True
             closest_r['paired'] = True
             if is_full_overlap(lp, closest_r):
-                hits.append({'type': 'Ambiguous Full Overlap', 'l_peak': lp, 'r_peak': closest_r})
+                hits.append({'type': 'Full Flank Overlap', 'l_peak': lp, 'r_peak': closest_r})
             else:
                 ov = check_overlap(lp, closest_r)
                 if ov > 0:
@@ -607,8 +592,6 @@ def parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_
     # 4. Resolve Orientation and Formatting
     final_hits = []
     for h in hits:
-        if h['type'] == 'Ambiguous Full Overlap':
-            h['type'] = 'Off-Target Amplicon (Noise)'
         orientation = '?'
         left_pos_val = 'N/A'
         right_pos_val = 'N/A'
@@ -764,7 +747,7 @@ def parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_
             call_val = 'novel (TSD)'
             
         # * suffix is only meaningful for novel (TSD): marks cases where flanking peaks
-        # overlap by > MAX_TSD_OVERLAP bp, indicating a real insertion with no empty-locus gap.
+        # overlap by > MAX_TSD_OVERLAP bp (excessive overlap exceeding standard TSD length).
         if call_val == 'novel (TSD)' and gap_val != 'N/A' and isinstance(gap_val, (int, float)) and gap_val < -MAX_TSD_OVERLAP:
             call_val = 'novel (TSD)*'
             

@@ -194,23 +194,26 @@ Active un-paired peaks are processed using coordinate-based overlap check functi
    - Reported as `Novel Pair`.
 
 #### Stage 3: Resolve Singletons and Noise
-1. **Off-Target Amplicon (Noise)**:
-    - If a remaining `HEAD` and `TAIL` peak fully overlap (containment ratio $> 90\%$), they represent off-target PCR amplification.
-    - Re-classified as `Off-Target Amplicon (Noise)` and moved to the unpaired TSV.
+1. **Full Flank Overlap**:
+    - If a remaining `HEAD` and `TAIL` peak fully overlap (containment ratio $> 80\%$), they represent co-locating flank coverage.
+    - **Biological & Technical Sources**:
+      - **Transposition Intermediates (Hairpins / IS-Circles)**: Copy-out / paste-in transposition (e.g. in IS3, IS30, IS256 families) forms single-stranded hairpin or circularized IS intermediates joining IR-L and IR-R prior to target insertion, generating symmetric overlapping read flanks.
+      - **Off-Target PCR Amplification & Chimeras**: Non-specific primer annealing or chimeric PCR extension fragments covering a non-target region.
+    - Classified as `Full Flank Overlap` in result tables and report summaries (moved to `_unpaired.tsv`).
 2. **Singletons**:
     - Remaining un-paired peaks are reported as `HEAD-only` (5' flank only) or `TAIL-only` (3' flank only) singletons in the unpaired TSV.
 
 ---
 
-## 5. PCR Noise, Chimeras, and IS Orientation
+## 5. Full Flank Overlap Classification
 
-### PCR Chimera Filtering (Depth Ratio check)
-During PCR amplification of endogenous elements, high product concentrations can cause chimera artifacts (aborted extensions primer-matching a different flank).
-*   **The Artifact**: A chimera maps to the exact same position as a true flank, creating a false `HEAD`/`TAIL` overlapping peak.
-*   **The Solution**: True insertion overlaps (like TSDs) exhibit balanced depth. Chimeras show massive depth asymmetry.
-*   **Rule**: If a `HEAD` and `TAIL` peak overlap by 90%+ (`is_full_overlap`), their depth ratio is calculated:
-    $$\text{Ratio} = \frac{\max(\text{mean\_depth}_{\text{left}}, \text{mean\_depth}_{\text{right}})}{\min(\text{mean\_depth}_{\text{left}}, \text{mean\_depth}_{\text{right}})}$$
-*   If the ratio is $> 5.0$, the minor peak is flagged as a chimera and discarded.
+Full Flank Overlap calls are identified purely based on the overlap fraction between co-locating peaks:
+*   **Rule**: If a `HEAD` and `TAIL` peak on the same chromosome overlap by 90%+ (`is_full_overlap`), the pair is classified as **`Full Flank Overlap`** (and output to `_unpaired.tsv`).
+*   **No Depth Ratio Cutoff**: All fully overlapping peak pairs ($\ge 90\%$ containment) are retained as `Full Flank Overlap` calls without filtering by depth asymmetry ratios.
+        style K fill:#e74c3c,stroke:#c0392b,stroke-width:2px,color:#fff
+        style G fill:#f39c12,stroke:#d35400,stroke-width:2px,color:#fff
+    end
+```
 
 ### Resolving IS Orientation
 Based on outward-facing primers, the orientation of a paired insertion is deduced using their coordinates:
@@ -260,7 +263,6 @@ The pipeline generates an interactive HTML visualization report (`{sample}__{ref
 
 ### 7.1 Section 1: Summary Table
 - Displays a tight, compact summary table detailing the counts for each of the core detection classes (including zero-count rows shown in muted grey for easy follow).
-- The class `'Off-Target Amplicon (Noise)'` is dynamically renamed to `'Left-Right Imbalance Depth'` for clearer representation in the HTML report.
 
 ### 7.2 Section 2: Known IS Loci on Reference (BLASTN)
 - Displays all reference IS positions scanned by BLASTN (within a window defined by `EXTENSION_PADDING = 2500` bp).
