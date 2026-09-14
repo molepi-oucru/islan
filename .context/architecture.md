@@ -7,16 +7,16 @@ This document details the modular architecture of the IS-Seq analysis pipeline.
 ```mermaid
 graph TD
     A1[Raw Forward FASTQ Reads _1] --> B(qc.py / Demux)
-    C[config/primers.fasta] --> B
+    C[config/targets.fasta] --> B
     B --> D[Demultiplexed Forward Reads]
-    D --> B1(filter_reads.py)
+    D --> B1(filter.py)
     B1 --> D2[Filtered Forward Reads]
     
-    A2[Raw Reverse FASTQ Reads _2] --> B2(extract_pairs.py)
+    A2[Raw Reverse FASTQ Reads _2] --> B2(pairing.py)
     D2 --> B2
     B2 --> D3[Filtered Reverse Reads]
     
-    D2 --> E(Alignment Module - bwa-mem2)
+    D2 --> E(Alignment Module - bwa / bwa-mem2)
     D3 --> E
     F[Reference Genome] --> E
     E --> G[Mapped BAM File]
@@ -31,9 +31,6 @@ The pipeline parameterizes its modules via `config/config.yaml`. The schema is d
 # Path to the targets database file.
 # Used as the IS element registry source by ALL modules (is-mapping + pre-process).
 targets_file: "config/targets.fasta"
-
-# Path to the primers database file (used by pre-process for HEAD/TAIL filtering).
-primers_file: "config/primers.fasta"
 
 # Main pipeline output directory
 output_dir: "results_asv"
@@ -53,7 +50,6 @@ preprocessing:
 is_mapping:
   # IS element short name to target (e.g. ISKpn26).
   # Restricts the known-IS reference scan to this element only.
-  # In WGS mode this is auto-derived from the --queries filename if left null.
   # Leave null to scan all IS elements in targets_file.
   is_name: null
   cutoff: 6               # Minimum read depth to report an insertion site
@@ -62,8 +58,5 @@ is_mapping:
   min_mapq: 30            # Min mapping quality (0 retains multi-mappers; discards 0 < MAPQ < min_mapq)
   flank_len: 300          # Flanking window around known IS boundaries (bp)
   threads: 8              # Threads for BWA and samtools
-  # WGS mode only:
-  min_clip: 10            # Minimum soft-clip size to extract as flank (bp)
-  max_clip: 30            # Maximum soft-clip size to extract as flank (bp)
 ```
 

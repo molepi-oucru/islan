@@ -12,7 +12,7 @@ Before reads are filtered, an optional Quality Control & Demultiplexing step is 
   - Parses the input forward FASTQ file using a fast 4-line parsing method.
   - Drops **poly-N reads** (sequences consisting entirely of 'N' characters).
   - Extracts the 8-bp i5 index sequence prefix if `index_i5` is `True`.
-  - Demultiplexes reads using Hamming distance index matching (distance $\le$ `i5-mismatch` tolerance, default 2) based on the known indices in `primers.fasta`.
+  - Demultiplexes reads using Hamming distance index matching (distance $\le$ `i5-mismatch` tolerance, default 2) based on the known indices in `targets.fasta`.
   - Reads matching known indices are written to `demux_reads/{sample}_index-{IS_element}_1.fastq.gz`. Reads that do not match any known index are written to `demux_reads/{sample}_index-undetermined_1.fastq.gz`.
   - Calculates sample index status based on demultiplexing counts:
     - **`Index failure`**: Expected index reads account for < 30% of total non-poly-N reads. (Downstream filtering for this sample is automatically skipped).
@@ -26,7 +26,7 @@ Before reads are filtered, an optional Quality Control & Demultiplexing step is 
 
 ## 1. Reads Filtering & Trimming Algorithm
 
-The core filtering step (implemented in `islan/filter_reads.py`) processes forward reads to trim the index, output filtered forward reads, and extract HEAD/TAIL segments.
+The core filtering step (implemented in `islan/filter.py`) processes forward reads to trim the index, output filtered forward reads, and extract HEAD/TAIL segments.
 
 ```mermaid
 flowchart TD
@@ -81,9 +81,9 @@ For each target primer $P$ (HEAD or TAIL) of length $L_P$:
 
 ## 2. Reverse Reads Pairing (Deferred)
 
-Since IS-Seq uses paired-end sequencing, the reverse reads must match the filtered forward reads. Rather than running both simultaneously, the reverse matching is deferred to a separate script `islan/extract_pairs.py`:
+Since IS-Seq uses paired-end sequencing, the reverse reads must match the filtered forward reads. Rather than running both simultaneously, the reverse matching is deferred to a separate script `islan/pairing.py`:
 - **Method**: The forward filtering stage generates `{sample}_filtered_1.fastq.gz` containing the filtered forward reads.
-- **Processing**: The `extract_pairs.py` script reads the forward FASTQ file (or a plain text file of read IDs), collects the set of passed read IDs, and scans the raw reverse FASTQ read file sequentially. For any reverse read matching a forward read ID, it writes it to the output reverse FASTQ file.
+- **Processing**: The `pairing.py` script reads the forward FASTQ file (or a plain text file of read IDs), collects the set of passed read IDs, and scans the raw reverse FASTQ read file sequentially. For any reverse read matching a forward read ID, it writes it to the output reverse FASTQ file.
 - **Complexity**: $O(N)$ to build the lookup set of forward IDs, and $O(1)$ lookup complexity per read when scanning the reverse FASTQ. This ensures the output reverse files match the filtered forward files exactly.
 
 ---
@@ -119,7 +119,7 @@ Active un-paired peaks are resolved using coordinate overlap definitions and cen
 - **Novel Pair (Standard)**: Remaining `HEAD` and `TAIL` peaks do not overlap but are within `MAX_PAIRING_DISTANCE` (default: 100 bp) gap distance.
 
 ### Step 4.3: Noise and Singleton Resolution (Stage 3)
-- **PCR Off-Target Noise**: Remaining `HEAD` and `TAIL` peaks that fully overlap (containment ratio $> 90\%$) are classified as `Off-Target Amplicon (Noise)`. In the HTML report, this class is displayed as `Left-Right Imbalance Depth`.
+- **Full Flank Overlap**: Remaining `HEAD` and `TAIL` peaks that fully overlap (overlap fraction $\ge 90\%$) are classified as `Full Flank Overlap`.
 - **Singletons**: Remaining un-paired peaks are classified as `HEAD-only` or `TAIL-only` singletons.
-- **Output Split**: Paired hits (Stages 1 and 2) are written to `{sample}_table.tsv` with flanking gene annotations. Singletons and Noise are written to `{sample}_unpaired.tsv` with gene columns omitted. Depth stats are reported as median and IQR.
+- **Output Split**: Paired hits (Stages 1 and 2) are written to `{sample}_table.tsv` with flanking gene annotations. Singletons and Full Flank Overlaps are written to `{sample}_unpaired.tsv` with gene columns omitted. Depth stats are reported as median and IQR.
 

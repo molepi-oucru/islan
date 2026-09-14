@@ -4,9 +4,6 @@
 # Used as the IS element registry source by ALL modules (is-mapping + pre-process).
 targets_file: "config/targets.fasta"
 
-# Path to the primers/targets database file
-primers_file: "config/targets.fasta"
-
 # Main pipeline output directory
 output_dir: "results_asv"
 

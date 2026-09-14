@@ -141,11 +141,6 @@ Bacteria often harbor plasmids in addition to the primary chromosome.
 
 ### 4.3 The Three-Stage Pairing Logic
 
-#### Step 0: Chimera Filtering (Pre-filtering)
-Before executing the three-stage pairing stages, the algorithm performs PCR chimera filtering on the raw peak pools:
-- **Condition**: If a `HEAD` (left) and `TAIL` (right) peak overlap by 90%+ (`is_full_overlap`) and their coverage depth ratio exceeds `5.0`.
-- **Action**: The minor peak is flagged as a chimera and immediately discarded from the active pools. It is excluded from all subsequent Stage 1, 2, or 3 pairing/singleton checks.
-
 #### Stage 1: Resolve Known (Endogenous) IS Elements
 1. **Target-Guided Scan**:
    - The reference genome is mapped against target elements carrying the `:FULL` suffix in the [targets.fasta](file:///data/SiNguyen/1.SIXTEEN/IS-SEQ/PISE/config/targets.fasta) file using `bwa mem -a` (or BLASTN).
@@ -177,11 +172,11 @@ Active un-paired peaks are processed using coordinate-based overlap check functi
 
 #### Stage 3: Resolve Singletons and Noise
 1. **Full Flank Overlap**:
-    - If a remaining `HEAD` and `TAIL` peak fully overlap (containment ratio $> 80\%$), they represent co-locating flank coverage.
+    - If a remaining `HEAD` and `TAIL` peak fully overlap (overlap fraction $\ge 90\%$), they represent co-locating flank coverage.
     - **Biological & Technical Sources**:
       - **Transposition Intermediates (Hairpins / IS-Circles)**: Copy-out / paste-in transposition (e.g. in IS3, IS30, IS256 families) forms single-stranded hairpin or circularized IS intermediates joining IR-L and IR-R prior to target insertion, generating symmetric overlapping read flanks.
       - **Off-Target PCR Amplification & Chimeras**: Non-specific primer annealing or chimeric PCR extension fragments covering a non-target region.
-    - Classified as `Full Flank Overlap` in result tables and report summaries (moved to `_unpaired.tsv`).
+    - Classified as `Full Flank Overlap` in result tables and report summaries (written to `_unpaired.tsv`).
 2. **Singletons**:
     - Remaining un-paired peaks are reported as `HEAD-only` (5' flank only) or `TAIL-only` (3' flank only) singletons in the unpaired TSV.
 
@@ -192,10 +187,6 @@ Active un-paired peaks are processed using coordinate-based overlap check functi
 Full Flank Overlap calls are identified purely based on the overlap fraction between co-locating peaks:
 *   **Rule**: If a `HEAD` and `TAIL` peak on the same chromosome overlap by 90%+ (`is_full_overlap`), the pair is classified as **`Full Flank Overlap`** (and output to `_unpaired.tsv`).
 *   **No Depth Ratio Cutoff**: All fully overlapping peak pairs ($\ge 90\%$ containment) are retained as `Full Flank Overlap` calls without filtering by depth asymmetry ratios.
-        style K fill:#e74c3c,stroke:#c0392b,stroke-width:2px,color:#fff
-        style G fill:#f39c12,stroke:#d35400,stroke-width:2px,color:#fff
-    end
-```
 
 ### Resolving IS Orientation
 Based on outward-facing primers, the orientation of a paired insertion is deduced using their coordinates:
@@ -208,7 +199,7 @@ Based on outward-facing primers, the orientation of a paired insertion is deduce
 
 ISLAN outputs two main TSV files:
 1. **`{sample}_table.tsv`**: Paired insertions (Known, Novel, and resolved Tandems) with flanking gene annotations.
-2. **`{sample}_unpaired.tsv`**: Unpaired singletons and off-target noise (with gene annotations omitted).
+2. **`{sample}_unpaired.tsv`**: Unpaired singletons and off-target noise / full flank overlaps (with gene annotations omitted).
 
 ### Output Column Descriptions
 
@@ -220,7 +211,7 @@ ISLAN outputs two main TSV files:
 | `x` | Left-most boundary of the insertion site. |
 | `y` | Right-most boundary of the insertion site. |
 | `gap` | Gap distance between insertion site boundaries. Positive for non-overlapping gaps; negative for overlaps (TSDs). |
-| `call` | Classification of the hit: `known`, `novel`, `novel (TSD)`. If a `novel (TSD)` hit has a flanking overlap exceeding `MAX_TSD_OVERLAP` (20 bp), it is reported as `novel (TSD)*` to indicate possible false positives (empty/wild-type loci). Other classes do not receive the `*` suffix. |
+| `call` | Classification of the hit: `known`, `novel`, `novel (TSD)`, `Tandem Gap (same direction)`, `Tandem Pair (+-)`, `Tandem Pair (-+)`, `Full Flank Overlap`, `HEAD-only`, `TAIL-only`. If a `novel (TSD)` hit has a flanking overlap exceeding `MAX_TSD_OVERLAP` (20 bp), it is reported as `novel (TSD)*` to indicate possible false positives (empty/wild-type loci). |
 | `left_pos` | Chromosome coordinate range of the left flanking region (derived from 5'/HEAD or 3'/TAIL depending on orientation). |
 | `right_pos` | Chromosome coordinate range of the right flanking region (derived from 3'/TAIL or 5'/HEAD depending on orientation). |
 | `left_depth_median` | Median coverage depth across the left flanking peak. |

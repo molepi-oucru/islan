@@ -70,25 +70,16 @@ Extract reverse reads matching your filtered forward reads or ID list:
   ```
 
 ### IS Mapping (`islan is-mapping`)
-Map filtered reads to identify insertion sites on a reference genome.
-- **WGS Mode**: Map raw forward/reverse reads:
-  ```bash
-  uv run islan is-mapping \
-    --reads /path/to/sample_R1.fastq.gz /path/to/sample_R2.fastq.gz \
-    --queries /path/to/IS.fasta \
-    --reference /path/to/reference.gbk \
-    --output_dir results_wgs_mapping
-  ```
-- **Targeted Mode**: Map filtered and extracted HEAD/TAIL reads directly:
-  ```bash
-  uv run islan is-mapping --targeted \
-    --head results_asv/filtered_reads/sample_filtered_1_HEAD.fastq.gz \
-    --tail results_asv/filtered_reads/sample_filtered_1_TAIL.fastq.gz \
-    --filtered_forward results_asv/filtered_reads/sample_filtered_1.fastq.gz \
-    --filtered_reverse results_asv/filtered_reads/sample_filtered_2.fastq.gz \
-    --reference /path/to/reference.gbk \
-    --output_dir results_targeted_mapping
-  ```
+Map filtered reads to identify insertion sites on a reference genome:
+```bash
+uv run islan is-mapping \
+  --head results_asv/filtered_reads/sample_filtered_1_HEAD.fastq.gz \
+  --tail results_asv/filtered_reads/sample_filtered_1_TAIL.fastq.gz \
+  --filtered_forward results_asv/filtered_reads/sample_filtered_1.fastq.gz \
+  --filtered_reverse results_asv/filtered_reads/sample_filtered_2.fastq.gz \
+  --reference /path/to/reference.gbk \
+  --output_dir results_targeted_mapping
+```
 
 
 ## Running Tests
