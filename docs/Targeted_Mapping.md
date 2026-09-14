@@ -153,40 +153,46 @@ Bacteria often harbor plasmids in addition to the primary chromosome.
 3. **Logging**: The pipeline reports the total known copies found on the reference and how many were successfully paired.
 
 #### Stage 2: Resolve Novel Insertions and Tandems
-Active un-paired peaks are processed using coordinate-based overlap check functions:
-1. **Novel Same-Direction Tandem**:
-   - Signature: Two insertions in the same direction (`++` or `--`) next to each other.
-   - Coordinate check: `l_peak_1` (`HEAD`) partially overlaps with a central pair consisting of `r_peak_1` (`TAIL`) and `l_peak_2` (`HEAD`) that fully overlap, which in turn partially overlaps with `r_peak_2` (`TAIL`).
-   - Reported as `Tandem Gap (same direction)`.
-2. **Novel Opposite-Direction Tandem**:
-   - Signature `+-` (pointing towards each other): Two `HEAD` (5') peaks (`lp1`, `lp2`) both partially overlap with a single central `rpN` (`TAIL`). Reported as `Tandem Pair (+-)`.
-   - Signature `-+` (pointing away from each other): Two `TAIL` (3') peaks (`rp1`, `rp2`) both partially overlap with a single central `lpN` (`HEAD`). Reported as `Tandem Pair (-+)`.
-3. **Novel Pair (with Target Site Duplications - TSD)**:
+Active un-paired peaks are processed using coordinate-based overlap check functions to identify complex tandem insertions:
+
+1. **Novel Same-Direction Tandem (`++` or `--`)**:
+   - **Biological Structure**: Two adjacent IS elements inserted back-to-back in the same orientation ($IS_A \rightarrow IS_B \rightarrow$).
+   - **Detection Logic**: 
+     - A central junction is formed where a 3' `TAIL` peak (`rp1`) and a 5' `HEAD` peak (`lp2`) **fully overlap** ($\ge 90\%$ containment via `is_full_overlap`).
+     - The algorithm then searches for an outer 5' `HEAD` peak (`lp1`) upstream and an outer 3' `TAIL` peak (`rp2`) downstream that **partially overlap** with this central junction.
+     - When all 4 peaks match, the outer pairs (`lp1` + `rp1` and `lp2` + `rp2`) are called as two `Novel Pair` hits, and the central junction is reported as `Tandem Gap (same direction)`.
+2. **Novel Opposite-Direction Tandem (`+-`)**:
+   - **Biological Structure**: Two IS elements pointing towards each other ($HEAD_1 \rightarrow \leftarrow HEAD_2$).
+   - **Detection Logic**: One central 3' `TAIL` peak (`rpN`) **partially overlaps** with **two distinct** 5' `HEAD` peaks (`lp1`, `lp2`). Reported as `Tandem Pair (+-)`.
+3. **Novel Opposite-Direction Tandem (`-+`)**:
+   - **Biological Structure**: Two IS elements pointing away from each other ($\leftarrow TAIL_1 \quad TAIL_2 \rightarrow$).
+   - **Detection Logic**: One central 5' `HEAD` peak (`lpN`) **partially overlaps** with **two distinct** 3' `TAIL` peaks (`rp1`, `rp2`). Reported as `Tandem Pair (-+)`.
+4. **Novel Pair (with Target Site Duplications - TSD)**:
    - Signature: A remaining `HEAD` (5') and `TAIL` (3') peak partially overlap each other.
    - Distance logic: The overlap size must be smaller than the `MAX_PAIRING_DISTANCE` (default: 100 bp).
    - Flagging possible false positives: If the overlap size is larger than the `MAX_TSD_OVERLAP` threshold (default: 20 bp), the call is appended with a `*` suffix (i.e. `novel (TSD)*`) to pinpoint potential empty/wild-type loci arising from non-specific primer binding. Note that this suffix is only biologically meaningful for and restricted to the `novel (TSD)` class.
    - Reported as `Novel Pair (TSD)` (or `Novel Pair (TSD)*`).
-4. **Novel Pair (Standard)**:
+5. **Novel Pair (Standard)**:
    - Signature: A remaining `HEAD` (5') and `TAIL` (3') peak do not overlap but are within `MAX_PAIRING_DISTANCE` (default: 100 bp) of each other.
    - Reported as `Novel Pair`.
 
 #### Stage 3: Resolve Singletons and Noise
 1. **Full Flank Overlap**:
-    - If a remaining `HEAD` and `TAIL` peak fully overlap (overlap fraction $\ge 90\%$), they represent co-locating flank coverage.
+    - If a remaining `HEAD` and `TAIL` peak fully overlap (overlap fraction $\ge 90\%$) without the supporting outer peaks needed to complete a 4-peak tandem structure, they are classified as **`Full Flank Overlap`** (written to `_unpaired.tsv`).
     - **Biological & Technical Sources**:
       - **Transposition Intermediates (Hairpins / IS-Circles)**: Copy-out / paste-in transposition (e.g. in IS3, IS30, IS256 families) forms single-stranded hairpin or circularized IS intermediates joining IR-L and IR-R prior to target insertion, generating symmetric overlapping read flanks.
+      - **Incomplete Tandem Junctions**: Isolated tandem junctions where outer genomic flanks were unsequenced or dropped due to low coverage.
       - **Off-Target PCR Amplification & Chimeras**: Non-specific primer annealing or chimeric PCR extension fragments covering a non-target region.
-    - Classified as `Full Flank Overlap` in result tables and report summaries (written to `_unpaired.tsv`).
 2. **Singletons**:
     - Remaining un-paired peaks are reported as `HEAD-only` (5' flank only) or `TAIL-only` (3' flank only) singletons in the unpaired TSV.
 
 ---
 
-## 5. Full Flank Overlap Classification
+## 5. Full Flank Overlap vs. Tandem Classification
 
-Full Flank Overlap calls are identified purely based on the overlap fraction between co-locating peaks:
-*   **Rule**: If a `HEAD` and `TAIL` peak on the same chromosome overlap by 90%+ (`is_full_overlap`), the pair is classified as **`Full Flank Overlap`** (and output to `_unpaired.tsv`).
-*   **No Depth Ratio Cutoff**: All fully overlapping peak pairs ($\ge 90\%$ containment) are retained as `Full Flank Overlap` calls without filtering by depth asymmetry ratios.
+* **Relationship to Tandems**: The central junction of a same-direction tandem ($rp_1$ + $lp_2$) exhibits a $\ge 90\%$ `is_full_overlap`. However, when outer flanking peaks ($lp_1$ and $rp_2$) exist, the pipeline resolves the structure into paired insertion hits + a `Tandem Gap (same direction)` call.
+* **Standalone Classification**: If a 90%+ overlapping `HEAD` and `TAIL` pair lacks outer flanking peaks, it is classified as a standalone **`Full Flank Overlap`** (output to `_unpaired.tsv`).
+* **No Depth Ratio Cutoff**: All fully overlapping peak pairs ($\ge 90\%$ containment) are retained without filtering by depth asymmetry ratios.
 
 ### Resolving IS Orientation
 Based on outward-facing primers, the orientation of a paired insertion is deduced using their coordinates:
