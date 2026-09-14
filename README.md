@@ -117,7 +117,7 @@ For details on the algorithm, see [Targeted_Mapping.md](docs/Targeted_Mapping.md
 ### 1. Sequencing Read File Naming Conventions
 Raw sequencing read files MUST be gzipped FASTQ files (`.fastq.gz` or `.fq.gz`) and MUST follow the naming format:
 
-$$\text{\{sample\}\_\{IS-element\}\_\{1,2\}.fastq.gz} \quad \text{or} \quad \text{\{sample\}\_\{IS-element\}\_\{1,2\}.fq.gz}$$
+`{sample}_{IS-element}_{1,2}.fastq.gz`, or `{sample}_{IS-element}_{1,2}.fq.gz`
 
 * **Forward Reads (Read 1)**: Must end with `_1.fastq.gz` or `_1.fq.gz`.
 * **Reverse Reads (Read 2)**: Must end with `_2.fastq.gz` or `_2.fq.gz`.
@@ -128,17 +128,15 @@ $$\text{\{sample\}\_\{IS-element\}\_\{1,2\}.fastq.gz} \quad \text{or} \quad \tex
 * `502-ISKpn26_1.fastq.gz` & `502-ISKpn26_2.fastq.gz`
 * `sample01_ISAeme19_1.fq.gz` & `sample01_ISAeme19_2.fq.gz`
 
----
-
 ### 2. Adding New Target IS Elements to `targets.fasta`
-The database file [`config/targets.fasta`](file:///data/SiNguyen/1.SIXTEEN/IS-SEQ/PISE/config/targets.fasta) is the **single source of truth** for all IS element targets used during preprocessing and mapping.
+The database file [`config/targets.fasta`](file:///data/SiNguyen/1.SIXTEEN/IS-SEQ/PISE/config/targets.fasta) is the **source of truth** for all IS element targets used during preprocessing and mapping.
 
 #### Header Format
 Every entry in `targets.fasta` uses a 3-field colon-separated header:
 ```text
 >[PREFIX]:[FULL_IS_NAME]:[ENTRY_TYPE]
 ```
-- `[PREFIX]`: Optional strain or study tag (e.g. `ST16`).
+- `[PREFIX]`: Optional strain or study tag (e.g. `ST23`).
 - `[FULL_IS_NAME]`: Full IS element identifier (e.g. `ISKpn26_IS5`). The short name before the underscore (`ISKpn26`) is used to match filenames and demultiplex reads.
 - `[ENTRY_TYPE]`: Must be strictly one of five tags:
   - `:FULL`: Complete nucleotide sequence of the known IS element.
@@ -148,26 +146,24 @@ Every entry in `targets.fasta` uses a 3-field colon-separated header:
   - `:P_DOWN`: Physical 3' (downstream) PCR primer sequence, **prefixed with the 8 bp i5 index barcode**.
 
 #### Required 5 FASTA Entries per IS Element:
-When adding a new target IS element, you **MUST define all 5 entries** in `targets.fasta`:
+When adding a new target IS element, you **MUST define all 5 entries** in `targets.fasta`, for example:
 
 ```fasta
->ST16:MY_NEW_IS_IS1:FULL
+>ST23:MY-NEW-IS_IS-FAMILY:FULL
 GGTGATGCTGCCAACTTACTGATTTAGTGTATGATGGTGTTTTTGAGGTGCTCCAGTGGCTTCTGTTTCTATCAGCTGT...
 
->ST16:MY_NEW_IS_IS1:HEAD
+>ST23:MY-NEW-IS_IS-FAMILY:HEAD
 GGTGATGCTGCCAACTTACTGATTTAGTGTATGATGGTGTTTTTGAGGTGCTCCAGTGGCTTCTGTTTCTATCAGCTGTCC
 
->ST16:MY_NEW_IS_IS1:TAIL
+>ST23:MY-NEW-IS_IS-FAMILY:TAIL
 TCAAAATCGGTGGAGCTGCATGACAAAGTCATCGGGCATTATCTGAACATAAAACACTATCAATAAGTTGGAGTCATTACC
 
->ST16:MY_NEW_IS_IS1:P_UP
+>ST23:MY-NEW-IS_IS-FAMILY:P_UP
 CTCTCTATGGACAGCTGATAGAAACAGAAGC
 
->ST16:MY_NEW_IS_IS1:P_DOWN
+>ST23:MY-NEW-IS_IS-FAMILY:P_DOWN
 CTCTCTATTCAAAATCGGTGGAGCTGCATG
 ```
-
----
 
 ## Running Tests
 Run unit tests to verify package integrity:
