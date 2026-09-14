@@ -112,6 +112,63 @@ Outputs are sorted genome-wide and split into:
 
 For details on the algorithm, see [Targeted_Mapping.md](docs/Targeted_Mapping.md).
 
+## Input Data & Configuration Specifications
+
+### 1. Sequencing Read File Naming Conventions
+Raw sequencing read files MUST be gzipped FASTQ files (`.fastq.gz` or `.fq.gz`) and MUST follow the naming format:
+
+$$\text{\{sample\}\_\{IS-element\}\_\{1,2\}.fastq.gz} \quad \text{or} \quad \text{\{sample\}\_\{IS-element\}\_\{1,2\}.fq.gz}$$
+
+* **Forward Reads (Read 1)**: Must end with `_1.fastq.gz` or `_1.fq.gz`.
+* **Reverse Reads (Read 2)**: Must end with `_2.fastq.gz` or `_2.fq.gz`.
+* **IS Element Identifier**: The filename must contain the target IS element short name (e.g., `IS1R`, `ISAeme19`, `ISKox3`, `ISKpn26`) so ISLAN can automatically match the sample to its target in `targets.fasta`.
+
+#### Examples of Valid File Names:
+* `278-IS1R_1.fastq.gz` & `278-IS1R_2.fastq.gz`
+* `502-ISKpn26_1.fastq.gz` & `502-ISKpn26_2.fastq.gz`
+* `sample01_ISAeme19_1.fq.gz` & `sample01_ISAeme19_2.fq.gz`
+
+---
+
+### 2. Adding New Target IS Elements to `targets.fasta`
+The database file [`config/targets.fasta`](file:///data/SiNguyen/1.SIXTEEN/IS-SEQ/PISE/config/targets.fasta) is the **single source of truth** for all IS element targets used during preprocessing and mapping.
+
+#### Header Format
+Every entry in `targets.fasta` uses a 3-field colon-separated header:
+```text
+>[PREFIX]:[FULL_IS_NAME]:[ENTRY_TYPE]
+```
+- `[PREFIX]`: Optional strain or study tag (e.g. `ST16`).
+- `[FULL_IS_NAME]`: Full IS element identifier (e.g. `ISKpn26_IS5`). The short name before the underscore (`ISKpn26`) is used to match filenames and demultiplex reads.
+- `[ENTRY_TYPE]`: Must be strictly one of five tags:
+  - `:FULL`: Complete nucleotide sequence of the known IS element.
+  - `:HEAD`: 5' terminal sequence of the IS element (~80–100 bp).
+  - `:TAIL`: 3' terminal sequence of the IS element (~80–100 bp).
+  - `:P_UP`: Physical 5' (upstream) PCR primer sequence, **prefixed with the 8 bp i5 index barcode**.
+  - `:P_DOWN`: Physical 3' (downstream) PCR primer sequence, **prefixed with the 8 bp i5 index barcode**.
+
+#### Required 5 FASTA Entries per IS Element:
+When adding a new target IS element, you **MUST define all 5 entries** in `targets.fasta`:
+
+```fasta
+>ST16:MY_NEW_IS_IS1:FULL
+GGTGATGCTGCCAACTTACTGATTTAGTGTATGATGGTGTTTTTGAGGTGCTCCAGTGGCTTCTGTTTCTATCAGCTGT...
+
+>ST16:MY_NEW_IS_IS1:HEAD
+GGTGATGCTGCCAACTTACTGATTTAGTGTATGATGGTGTTTTTGAGGTGCTCCAGTGGCTTCTGTTTCTATCAGCTGTCC
+
+>ST16:MY_NEW_IS_IS1:TAIL
+TCAAAATCGGTGGAGCTGCATGACAAAGTCATCGGGCATTATCTGAACATAAAACACTATCAATAAGTTGGAGTCATTACC
+
+>ST16:MY_NEW_IS_IS1:P_UP
+CTCTCTATGGACAGCTGATAGAAACAGAAGC
+
+>ST16:MY_NEW_IS_IS1:P_DOWN
+CTCTCTATTCAAAATCGGTGGAGCTGCATG
+```
+
+---
+
 ## Running Tests
 Run unit tests to verify package integrity:
 ```bash
