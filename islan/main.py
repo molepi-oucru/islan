@@ -4,8 +4,6 @@ import argparse
 import logging
 from islan.constants import (
     DEFAULT_OUTPUT_DIR,
-    DEFAULT_MIN_CLIP,
-    DEFAULT_MAX_CLIP,
     DEFAULT_CUTOFF,
     DEFAULT_MERGING,
     DEFAULT_IS_LENGTH,
