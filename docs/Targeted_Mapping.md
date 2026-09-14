@@ -1,15 +1,15 @@
 # Targeted IS-Seq Mapping Guide
 
-This document describes the design, algorithms, parameter tuning, output formats, sequence compositions, and mathematical logic behind the `islan is-mapping --targeted` pipeline.
+This document describes the design, algorithms, parameter tuning, output formats, sequence compositions, and mathematical logic behind the `islan is-mapping` pipeline.
 
 ---
 
 ## 1. Quick Start Example Command
 
-To run the pipeline in targeted mode, supply the filtered forward reads, filtered reverse reads (ensuring adapters and index offsets are removed), and the extracted `HEAD`/`TAIL` read subsets:
+To run the pipeline mapping step, supply the filtered forward reads, filtered reverse reads (ensuring adapters and index offsets are removed), and the extracted `HEAD`/`TAIL` read subsets:
 
 ```bash
-uv run islan is-mapping --targeted \
+uv run islan is-mapping \
   --head results_asv/filtered_reads/sample_1_HEAD.fastq.gz \
   --tail results_asv/filtered_reads/sample_1_TAIL.fastq.gz \
   --filtered_forward results_asv/filtered_reads/sample_filtered_1.fastq.gz \
@@ -25,7 +25,7 @@ uv run islan is-mapping --targeted \
 Alternatively, to run the pipeline with forward reads only (single-end analysis), add the `--forward-only` flag (in this mode, `--filtered_reverse` is not required):
 
 ```bash
-uv run islan is-mapping --targeted \
+uv run islan is-mapping \
   --head results_asv/filtered_reads/sample_1_HEAD.fastq.gz \
   --tail results_asv/filtered_reads/sample_1_TAIL.fastq.gz \
   --filtered_forward results_asv/filtered_reads/sample_filtered_1.fastq.gz \
@@ -39,12 +39,11 @@ uv run islan is-mapping --targeted \
 ```
 
 ### Key CLI Parameters
-*   `--targeted`: Activates targeted amplicon parsing mode, bypassing the standard WGS soft-clip parsing heuristics.
 *   `--head`: Path to `{sample}_filtered_1_HEAD.fastq.gz`, containing reads matching the 5' IS terminus sequence (`HEAD`).
 *   `--tail`: Path to `{sample}_filtered_1_TAIL.fastq.gz`, containing reads matching the 3' IS terminus sequence (`TAIL`).
 *   `--filtered_forward`: Path to `{sample}_filtered_1.fastq.gz` (i5 index-trimmed Read 1 files).
 *   `--filtered_reverse`: Path to `{sample}_filtered_2.fastq.gz` (paired Read 2 files).
-*   `--forward-only`: Runs the mapping and analysis with forward reads (Read 1) only (single-end). In targeted mode, this ignores/skips reverse reads and doesn't require `--filtered_reverse`. In WGS mode, this configures single-end BWA mapping.
+*   `--forward-only`: Runs the mapping and analysis with forward reads (Read 1) only (single-end).
 *   `--cutoff`: Minimum read depth cutoff at each base position to consider it as part of a called flanking peak (default 6).
 *   `--min-mapq`: Minimum mapping quality filter (default 30). This retains perfect multi-mappers (`MAPQ == 0`) and filters out weak cross-hybridizations (`0 < MAPQ < 30`).
 *   `--flank-len`: Search window size around known reference copies (default 300 bp).
@@ -87,7 +86,7 @@ During `islan pre-process` (or `islan filter`), raw MiSeq FASTQ files are demult
 
 ### 2.3 How Flanking Sequences Are Prepared for Reference Mapping
 
-When `islan is-mapping --targeted` is executed, the pipeline processes the files as follows:
+When `islan is-mapping` is executed, the pipeline processes the files as follows:
 
 1. **ID & Terminal Length Extraction**: Read IDs and exact IS terminal sequence lengths (`head_primer_len` and `tail_primer_len`) are extracted from `{sample}_filtered_1_HEAD.fastq.gz` and `{sample}_filtered_1_TAIL.fastq.gz`.
 2. **IS Sequence Trimming for Pure Genomic Flanks**:
@@ -97,23 +96,6 @@ When `islan is-mapping --targeted` is executed, the pipeline processes the files
    - Reverse reads (Read 2) corresponding to `HEAD` IDs are concatenated into `left_final.fastq`.
    - Reverse reads (Read 2) corresponding to `TAIL` IDs are concatenated into `right_final.fastq`.
 4. **Alignment**: `left_final.fastq` (5' genomic flanks) and `right_final.fastq` (3' genomic flanks) are mapped independently to the reference genome using `bwa mem`.
-
----
-
-## 3. Why WGS Mode Should Not Be Used for Targeted IS-Seq
-
-You must always run `islan is-mapping` with the `--targeted` flag when analyzing IS-Seq data. Running standard WGS mode (the original ISMapper algorithm) on targeted amplicon reads breaks down because of the difference in read structures.
-
-### WGS shotgun vs. Amplicon Data Structure
-- **WGS Shotgun Data**: DNA is fragmented randomly. Read pairs spanning an IS boundary consist of one read mapping entirely to the genomic sequence, and its mate spanning the boundary (partially mapping to the IS, and partially to the genome).
-- **Targeted Amplicon Data**: Primers (`P_UP` / `P_DOWN`) bind *inside* the IS element termini (`HEAD` / `TAIL`) and point **outward** into the flanking genomic sequence. Thus:
-  - **Read 1 (`_1`)** always starts with the IS terminal sequence (`HEAD` or `TAIL` starting with `P_UP`/`P_DOWN`), reading outward into the genomic flank.
-  - **Read 2 (`_2`)** starts from the other end of the fragment, reading *backward* across the exact same genomic flank.
-
-### The Failure of WGS Heuristics
-The WGS algorithm (ISMapper) sorts shotgun reads into "Left Flank" and "Right Flank" buckets based on CIGAR soft-clipping and SAM orientation flags. When fed structured, outward-facing amplicon reads:
-1. **Overlapping Flanks Artifact**: For a known/endogenous IS element, both reads in a pair sequence the exact same genomic region. Due to SAM flag sorting, the WGS algorithm accidentally sorts Read `_1` into the "Left Flank" bucket and Read `_2` into the "Right Flank" bucket.
-2. **False Intersects & Data Loss**: The pipeline sees a "Left" and "Right" flank mapping to the same location and flags them as a false insertion. The WGS gap-size filter subsequently discards the hit because an overlap of ~1000+ bp violates novel insertion rules, resulting in silent data loss.
 
 ---
 

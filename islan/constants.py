@@ -37,8 +37,6 @@ GENE_REVERSE_COLOR = 'rgba(171, 71, 188, 0.8)'
 # Pipeline default parameters
 DEFAULT_OUTPUT_DIR = "results_ismapper"
 MAPPING_LOG_FILE = "islan_is_mapping.log"
-DEFAULT_MIN_CLIP = 10
-DEFAULT_MAX_CLIP = 30
 DEFAULT_CUTOFF = 6
 DEFAULT_MERGING = 100
 MAX_PAIRING_DISTANCE = 100

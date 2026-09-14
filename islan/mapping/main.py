@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 import argparse
-from .mapping import map_to_is_query_wgs, extract_targeted_flanks_pyfastx, map_to_ref_seq, create_bed_files
+from .mapping import extract_targeted_flanks_pyfastx, map_to_ref_seq, create_bed_files
 from .reporting import create_typing_output
 from .report_generator import generate_report
 from islan.constants import DEFAULT_OUTPUT_DIR, MAPPING_LOG_FILE
@@ -15,7 +15,7 @@ def run_is_mapping(args):
     # ------------------------------------------------------------------
     from islan.preprocess import load_config
     from islan.constants import (
-        DEFAULT_THREADS, DEFAULT_MIN_CLIP, DEFAULT_MAX_CLIP, DEFAULT_CUTOFF,
+        DEFAULT_THREADS, DEFAULT_CUTOFF,
         DEFAULT_MERGING, DEFAULT_IS_LENGTH, DEFAULT_MIN_MAPQ, DEFAULT_FLANK_LEN,
         ISElementRegistry,
     )
@@ -39,8 +39,6 @@ def run_is_mapping(args):
 
     # Apply merged values back onto args so the rest of the function is unchanged
     args.threads   = _get('threads',   'threads',   DEFAULT_THREADS)
-    args.min_clip  = _get('min_clip',  'min_clip',  DEFAULT_MIN_CLIP)
-    args.max_clip  = _get('max_clip',  'max_clip',  DEFAULT_MAX_CLIP)
     args.cutoff    = _get('cutoff',    'cutoff',    DEFAULT_CUTOFF)
     args.merging   = _get('merging',   'merging',   DEFAULT_MERGING)
     args.is_length = _get('is_length', 'is_length', DEFAULT_IS_LENGTH)
@@ -76,46 +74,25 @@ def run_is_mapping(args):
     left_flanking = None
     right_flanking = None
 
-    if args.targeted:
-        logging.info("Running in TARGETED mode...")
-        if args.forward_only:
-            if not args.head or not args.tail or not args.filtered_forward:
-                logging.error("Targeted forward-only mode requires --head, --tail, and --filtered_forward")
-                sys.exit(1)
-        else:
-            if not args.head or not args.tail or not args.filtered_forward or not args.filtered_reverse:
-                logging.error("Targeted mode requires --head, --tail, --filtered_forward, and --filtered_reverse")
-                sys.exit(1)
-
-        sample_prefix = os.path.basename(args.head).split("_")[0] if args.head else "sample"
-        left_flanking, right_flanking = extract_targeted_flanks_pyfastx(
-            filtered_1_fastq=args.filtered_forward,
-            filtered_2_fastq=args.filtered_reverse,
-            head_fastq=args.head,
-            tail_fastq=args.tail,
-            tmp_folder=tmp_dir,
-            sample_prefix=sample_prefix,
-            forward_only=args.forward_only
-        )
+    if args.forward_only:
+        if not args.head or not args.tail or not args.filtered_forward:
+            logging.error("Forward-only mode requires --head, --tail, and --filtered_forward")
+            sys.exit(1)
     else:
-        logging.info("Running in WGS mode...")
-        forward_read = args.reads[0]
-        if args.forward_only or len(args.reads) == 1:
-            reverse_read = None
-        else:
-            reverse_read = args.reads[1]
-        sample_prefix = os.path.basename(forward_read).split("_")[0]
-        left_flanking, right_flanking = map_to_is_query_wgs(
-            sample_prefix=sample_prefix,
-            forward_fastq=forward_read,
-            reverse_fastq=reverse_read,
-            is_query_fasta=args.queries,
-            tmp_folder=tmp_dir,
-            out_dir=out_dir,
-            min_clip=args.min_clip,
-            max_clip=args.max_clip,
-            threads=args.threads
-        )
+        if not args.head or not args.tail or not args.filtered_forward or not args.filtered_reverse:
+            logging.error("Targeted mapping requires --head, --tail, --filtered_forward, and --filtered_reverse")
+            sys.exit(1)
+
+    sample_prefix = os.path.basename(args.head).split("_")[0] if args.head else "sample"
+    left_flanking, right_flanking = extract_targeted_flanks_pyfastx(
+        filtered_1_fastq=args.filtered_forward,
+        filtered_2_fastq=args.filtered_reverse,
+        head_fastq=args.head,
+        tail_fastq=args.tail,
+        tmp_folder=tmp_dir,
+        sample_prefix=sample_prefix,
+        forward_only=args.forward_only
+    )
 
     logging.info("Flanking reads extracted. Proceeding to reference mapping.")
 
@@ -152,16 +129,7 @@ def run_is_mapping(args):
         logging.warning(f"Targets file not found. Known IS positions on reference will not be detected.")
         targets_fasta = None
 
-    # ------------------------------------------------------------------
-    # Auto-derive is_name from --queries filename in WGS mode
-    # ------------------------------------------------------------------
-    if not args.is_name and getattr(args, 'queries', None) and targets_fasta:
-        query_stem = os.path.basename(args.queries).rsplit('.', 1)[0]
-        registry = ISElementRegistry(targets_fasta)
-        _, derived = registry.resolve(query_stem)
-        if derived:
-            args.is_name = derived
-            logging.info(f"Auto-derived is_name='{derived}' from queries filename '{args.queries}'")
+
 
     left_bam, right_bam = map_to_ref_seq(
         ref_fasta=ref_fasta,

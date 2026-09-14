@@ -25,7 +25,6 @@ preprocessing:
 is_mapping:
   # IS element short name to target (e.g. ISKpn26).
   # Restricts the known-IS reference scan to this element only.
-  # In WGS mode this is auto-derived from the --queries filename if left null.
   # Leave null to scan all IS elements in targets_file.
   is_name: null
   cutoff: 6               # Minimum read depth to report an insertion site
@@ -34,9 +33,6 @@ is_mapping:
   min_mapq: 30            # Min mapping quality (0 retains multi-mappers; discards 0 < MAPQ < min_mapq)
   flank_len: 300          # Flanking window around known IS boundaries (bp)
   threads: 8              # Threads for BWA and samtools
-  # WGS mode only:
-  min_clip: 10            # Minimum soft-clip size to extract as flank (bp)
-  max_clip: 30            # Maximum soft-clip size to extract as flank (bp)
 
 # Alignment parameters (future use)
 alignment:
