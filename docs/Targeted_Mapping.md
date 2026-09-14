@@ -64,7 +64,7 @@ To avoid confusion, ISLAN makes a strict distinction between the physical PCR pr
     *   `P_DOWN` anneals near the 3' end of the IS element, pointing **outward** into the downstream genomic flank.
 
 *   **IS Element Termini (`HEAD` & `TAIL`)**:
-    *   `HEAD` and `TAIL` refer to the **structural 5' and 3' terminal regions** of the IS element body (typically ~80–100 bp sequences defined in `targets.fasta` or `primers.fasta`).
+    *   `HEAD` and `TAIL` refer to the **structural 5' and 3' terminal regions** of the IS element body (typically ~80–100 bp sequences defined in `targets.fasta`).
     *   **`HEAD` (5' IS Terminus)**: The 5' structural end of the IS element. The sequence of a forward read matching `HEAD` starts at position 0 with the `P_UP` primer sequence (~`len_actual_primer` bp) and extends through the rest of the ~80–100 bp 5' IS terminal sequence before entering the host genomic sequence.
         *   During reference mapping in forward (`F` / `+`) orientation, `HEAD`-derived flanking reads map to the **left (upstream)** genomic flank of the insertion site.
     *   **`TAIL` (3' IS Terminus)**: The 3' structural end of the IS element. The sequence of a forward read matching `TAIL` starts at position 0 with the `P_DOWN` primer sequence (~`len_actual_primer` bp) and extends through the rest of the ~80–100 bp 3' IS terminal sequence before entering the host genomic sequence.

@@ -149,8 +149,6 @@ def run_is_mapping(args):
     if not targets_fasta:
         targets_fasta = os.path.join(_pkg_root, "config", "targets.fasta")
     if not os.path.exists(targets_fasta):
-        targets_fasta = os.path.join(_pkg_root, "config", "primers.fasta")
-    if not os.path.exists(targets_fasta):
         logging.warning(f"Targets file not found. Known IS positions on reference will not be detected.")
         targets_fasta = None
 

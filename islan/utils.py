@@ -5,7 +5,7 @@ from Bio.Seq import Seq
 
 def load_primers(fasta_file_path, target_is_element):
     """
-    Load primers for a specific IS element from primers.fasta.
+    Load primers for a specific IS element from targets.fasta (or primers FASTA file).
     Returns a dictionary containing 'HEAD', 'TAIL', 'P_UP', and 'P_DOWN'.
     Note: P_UP and P_DOWN trimmed of their 5' 8bp index sequence.
     """
@@ -33,7 +33,7 @@ def load_primers(fasta_file_path, target_is_element):
 
 def load_known_indices(primers_path):
     """
-    Load known 8bp i5 indices for each IS element from primers.fasta.
+    Load known 8bp i5 indices for each IS element from targets.fasta (or primers FASTA file).
     """
     known_indices = {}
     try:

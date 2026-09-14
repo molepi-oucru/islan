@@ -69,7 +69,7 @@ islan pre-process \
 
 *Notes on Preprocessing:*
 * QC & demultiplexing are controlled via `--qc True` (default) or `--qc False`. 
-* Poly-N reads are dropped, and index demultiplexing is performed based on the 8-bp i5 index prefixes in `config/primers.fasta` with a mismatch tolerance specified by `--i5-mismatch` (default 2).
+* Poly-N reads are dropped, and index demultiplexing is performed based on the 8-bp i5 index prefixes in `config/targets.fasta` with a mismatch tolerance specified by `--i5-mismatch` (default 2).
 * Samples with expected index reads < 30% of total non-poly-N reads are classified as "Index failure" and automatically skipped in the downstream filtering.
 * Valid samples are trimmed by 8 bp, length-filtered with `MIN_LEN_FORWARD`, and split into HEAD/TAIL files based on local alignment match.
 * The processing statistics and classifications are saved to `islan_summary.tsv` in the output directory.

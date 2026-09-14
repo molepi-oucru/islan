@@ -79,7 +79,7 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
 
     target_is_element = config.get("target_is_element", None)
 
-    primers_file = config.get("primers_file", "config/primers.fasta")
+    primers_file = config.get("primers_file", config.get("targets_file", "config/targets.fasta"))
     if primers_file and not os.path.isabs(primers_file):
         config_dir = os.path.dirname(config_filepath)
         candidate_path = os.path.abspath(os.path.join(os.path.dirname(config_dir), primers_file))
@@ -88,7 +88,7 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
             candidate_path = os.path.abspath(os.path.join(pkg_project_root, primers_file))
             primers_file = candidate_path if os.path.exists(candidate_path) else os.path.abspath(primers_file)
 
-    targets_file = config.get("targets_file", "config/targets.fasta")
+    targets_file = config.get("targets_file", primers_file or "config/targets.fasta")
     if targets_file and not os.path.isabs(targets_file):
         config_dir = os.path.dirname(config_filepath)
         candidate_path = os.path.abspath(os.path.join(os.path.dirname(config_dir), targets_file))
@@ -100,11 +100,7 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
     # Build the IS element registry from targets.fasta (single source of truth)
     registry = ISElementRegistry(targets_file)
     if not registry.all_short_names:
-        logging.warning(f"ISElementRegistry: no IS elements found in '{targets_file}'. "
-                        "Falling back to primers_file for registry.")
-        registry = ISElementRegistry(primers_file)
-    if not registry.all_short_names:
-        logging.error("Could not build IS element registry from targets_file or primers_file. "
+        logging.error("Could not build IS element registry from targets_file. "
                       "Check that targets.fasta exists and has valid headers.")
         sys.exit(1)
     logging.info(f"IS element registry loaded: {registry.all_full_names}")
