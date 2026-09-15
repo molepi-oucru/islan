@@ -100,7 +100,7 @@ islan is-mapping \
   --filtered_forward results_asv/filtered_reads/sample_filtered_1.fastq.gz \
   --filtered_reverse results_asv/filtered_reads/sample_filtered_2.fastq.gz \
   --reference /path/to/reference.gbk \
-  --cutoff 6 \
+  --min-depth 6 \
   --min-mapq 30 \
   --flank-len 300 \
   --output_dir results_targeted_mapping

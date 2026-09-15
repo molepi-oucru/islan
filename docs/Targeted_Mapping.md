@@ -16,7 +16,7 @@ uv run islan is-mapping \
   --filtered_reverse results_asv/filtered_reads/sample_filtered_2.fastq.gz \
   --reference references/genome.gb \
   --output_dir results_targeted \
-  --cutoff 6 \
+  --min-depth 6 \
   --min-mapq 30 \
   --flank-len 300 \
   --threads 8
@@ -32,7 +32,7 @@ uv run islan is-mapping \
   --forward-only \
   --reference references/genome.gb \
   --output_dir results_targeted_forward_only \
-  --cutoff 6 \
+  --min-depth 6 \
   --min-mapq 30 \
   --flank-len 300 \
   --threads 8
@@ -44,7 +44,7 @@ uv run islan is-mapping \
 *   `--filtered_forward`: Path to `{sample}_filtered_1.fastq.gz` (i5 index-trimmed Read 1 files).
 *   `--filtered_reverse`: Path to `{sample}_filtered_2.fastq.gz` (paired Read 2 files).
 *   `--forward-only`: Runs the mapping and analysis with forward reads (Read 1) only (single-end).
-*   `--cutoff`: Minimum read depth cutoff at each base position to consider it as part of a called flanking peak (default 6).
+*   `--min-depth`: Minimum read depth cutoff at each base position to consider it as part of a called flanking peak (default 6).
 *   `--min-mapq`: Minimum mapping quality filter (default 30). This retains perfect multi-mappers (`MAPQ == 0`) and filters out weak cross-hybridizations (`0 < MAPQ < 30`).
 *   `--flank-len`: Search window size around known reference copies (default 300 bp).
 
@@ -119,9 +119,9 @@ Before the pairing logic is executed, extracted flanking reads are aligned back 
    - The depth of mapped reads is calculated genome-wide independently for left (5'/HEAD) and right (3'/TAIL) flanks.
    - To filter out low-coverage background noise, a minimal coverage filter is applied:
      ```bash
-     awk '$4 >= {cutoff}' {left_cov} > {left_final_cov}
+     awk '$4 >= {min_depth}' {left_cov} > {left_final_cov}
      ```
-   - Only bases with a coverage depth greater than or equal to the `--cutoff` threshold (default 6) are preserved.
+   - Only bases with a coverage depth greater than or equal to the `--min-depth` threshold (default 6) are preserved.
    - The remaining coordinates are merged using `bedtools merge -d {merging}` to call candidate flanking peaks. Any peak analyzed by the pairing logic is therefore supported by at least 6 reads.
 
 ### 4.2 Chromosome and Plasmid References

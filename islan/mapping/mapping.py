@@ -213,7 +213,7 @@ def map_to_ref_seq(ref_fasta, sample_prefix, left_flanking, right_flanking, tmp_
     
     return left_sorted, right_sorted
 
-def create_bed_files(left_bam, right_bam, tmp_folder, out_folder, cutoff, merging):
+def create_bed_files(left_bam, right_bam, tmp_folder, out_folder, min_depth, merging):
     """
     Create Bedtools coverage maps and filter by depth cutoff.
     """
@@ -233,9 +233,9 @@ def create_bed_files(left_bam, right_bam, tmp_folder, out_folder, cutoff, mergin
     run_command(f"bedtools genomecov -ibam {left_bam} -bg > {left_cov}", shell=True)
     run_command(f"bedtools genomecov -ibam {right_bam} -bg > {right_cov}", shell=True)
     
-    # Filter by cutoff using awk
-    run_command(f"awk '$4 >= {cutoff}' {left_cov} > {left_final_cov}", shell=True)
-    run_command(f"awk '$4 >= {cutoff}' {right_cov} > {right_final_cov}", shell=True)
+    # Filter by min_depth using awk
+    run_command(f"awk '$4 >= {min_depth}' {left_cov} > {left_final_cov}", shell=True)
+    run_command(f"awk '$4 >= {min_depth}' {right_cov} > {right_final_cov}", shell=True)
     
     # Merge
     run_command(f"bedtools merge -d {merging} -i {left_final_cov} > {left_merged_bed}", shell=True)

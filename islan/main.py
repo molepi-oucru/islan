@@ -4,9 +4,8 @@ import argparse
 import logging
 from islan.constants import (
     DEFAULT_OUTPUT_DIR,
-    DEFAULT_CUTOFF,
+    DEFAULT_MIN_DEPTH,
     DEFAULT_MERGING,
-    DEFAULT_IS_LENGTH,
     DEFAULT_MIN_MAPQ,
     DEFAULT_FLANK_LEN,
     DEFAULT_THREADS
@@ -57,9 +56,8 @@ def main():
     ismapper_parser.add_argument("--forward-only", "--forward_only", dest="forward_only", action="store_true", help="Run analysis with forward reads only (single-end)")
     ismapper_parser.add_argument("-o", "--output_dir", default=DEFAULT_OUTPUT_DIR, help="Output directory")
     ismapper_parser.add_argument("-t", "--threads", type=int, default=None, help="Number of threads")
-    ismapper_parser.add_argument("--cutoff", type=int, default=None, help="Minimum depth cutoff for reporting")
+    ismapper_parser.add_argument("--min-depth", "--min_depth", dest="min_depth", type=int, default=None, help="Minimum depth cutoff for reporting")
     ismapper_parser.add_argument("--merging", type=int, default=None, help="Merge distance for bedtools")
-    ismapper_parser.add_argument("--is_length", type=int, default=None, help=f"Max gap distance to pair endogenous IS flanks (default {DEFAULT_IS_LENGTH})")
     ismapper_parser.add_argument("--min-mapq", "--min_mapq", dest="min_mapq", type=int, default=None, help="Minimum mapping quality to filter reads (retains MAPQ == 0 multi-mappers; discards 0 < MAPQ < min_mapq)")
     ismapper_parser.add_argument("--flank-len", "--flank_len", dest="flank_len", type=int, default=None, help=f"Flanking window around known IS element boundaries (default {DEFAULT_FLANK_LEN} bp)")
     ismapper_parser.add_argument("--temp", action="store_true", help="Keep the temporary files directory after successful completion (default: remove)")

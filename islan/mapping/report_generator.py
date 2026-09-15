@@ -19,7 +19,6 @@ except ImportError as e:
 from islan.constants import (
     MAX_ALIGNMENT_READS,
     GC_WINDOW_SIZE,
-    FLANK_PADDING,
     PLOT_HEIGHT,
     READ_PADDING,
     ZOOM_THRESHOLD,
@@ -213,7 +212,7 @@ def parse_alignments_for_flanks(bam_path, chrom, start, end, ref_seq, flank_labe
         
     return reads_list
 
-def generate_combined_alignment_plotly(left_bam, right_bam, chrom, l_start, l_end, r_start, r_end, ref_seq, features, left_cov, right_cov, cutoff, title, l_label="head", r_label="tail"):
+def generate_combined_alignment_plotly(left_bam, right_bam, chrom, l_start, l_end, r_start, r_end, ref_seq, features, left_cov, right_cov, min_depth, title, l_label="head", r_label="tail"):
     # GC Content extends outside flanking region
     min_flank = min(l_start, r_start)
     max_flank = max(l_end, r_end)
@@ -826,7 +825,7 @@ def generate_known_is_locus_plot(
 def generate_report(
     table_file, report_file,
     reference_file=None,
-    cutoff=6,
+    min_depth=6,
     known_is=None,       # list of BLASTN hits [{'chr','start','end','name','strand'}, ...]
     unpaired_hits=None,  # list of HEAD-only / TAIL-only formatted hits
     left_bam=None,       # path to left sorted BAM
@@ -838,7 +837,7 @@ def generate_report(
       2. Known IS Loci (BLASTN): POSITIVE = paired flanks; NEGATIVE = singleton flanks
       3. Novel IS Loci: novel / novel (TSD) / novel (TSD)* insertions
     """
-    logging.info(f"Generating HTML visualization report: {report_file} (min_y={cutoff})")
+    logging.info(f"Generating HTML visualization report: {report_file} (min_y={min_depth})")
 
     if pd is None:
         logging.warning("Required packages for HTML report generation are missing. Skipping.")
@@ -986,7 +985,7 @@ def generate_report(
                     l_start_h, l_end_h, r_start_h, r_end_h,
                     ref_seq, features,
                     l_cov_src, r_cov_src,
-                    cutoff, hit_title,
+                    min_depth, hit_title,
                     l_label=l_label, r_label=r_label
                 )
                 pid = f"plot_locus{locus_idx}_hit{hit_idx}"
@@ -1092,7 +1091,7 @@ def generate_report(
                 l_start_h, l_end_h, r_start_h, r_end_h,
                 ref_seq, features,
                 l_cov_src, r_cov_src,
-                cutoff, title,
+                min_depth, title,
                 l_label=l_label, r_label=r_label
             )
             pid = f"plot_novel_{novel_count}"

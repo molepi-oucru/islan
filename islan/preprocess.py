@@ -4,7 +4,15 @@ import logging
 import concurrent.futures
 from Bio import SeqIO
 from islan import filter_reads
-from islan.constants import INDEX_LEN, ISElementRegistry
+from islan.constants import (
+    INDEX_LEN,
+    ISElementRegistry,
+    DEFAULT_MIN_LEN,
+    DEFAULT_I5_MISMATCH,
+    DEFAULT_MIN_COV,
+    DEFAULT_MIN_IDENTITY,
+    DEFAULT_QC,
+)
 
 
 def load_config(filepath):
@@ -79,23 +87,16 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
 
     target_is_element = config.get("target_is_element", None)
 
-    primers_file = config.get("primers_file", config.get("targets_file", "config/targets.fasta"))
-    if primers_file and not os.path.isabs(primers_file):
-        config_dir = os.path.dirname(config_filepath)
-        candidate_path = os.path.abspath(os.path.join(os.path.dirname(config_dir), primers_file))
-        if os.path.exists(candidate_path): primers_file = candidate_path
-        else:
-            candidate_path = os.path.abspath(os.path.join(pkg_project_root, primers_file))
-            primers_file = candidate_path if os.path.exists(candidate_path) else os.path.abspath(primers_file)
-
-    targets_file = config.get("targets_file", primers_file or "config/targets.fasta")
+    targets_file = config.get("targets_file", config.get("primers_file", "config/targets.fasta"))
     if targets_file and not os.path.isabs(targets_file):
         config_dir = os.path.dirname(config_filepath)
         candidate_path = os.path.abspath(os.path.join(os.path.dirname(config_dir), targets_file))
-        if os.path.exists(candidate_path): targets_file = candidate_path
+        if os.path.exists(candidate_path):
+            targets_file = candidate_path
         else:
             candidate_path = os.path.abspath(os.path.join(pkg_project_root, targets_file))
             targets_file = candidate_path if os.path.exists(candidate_path) else os.path.abspath(targets_file)
+    primers_file = targets_file
 
     # Build the IS element registry from targets.fasta (single source of truth)
     registry = ISElementRegistry(targets_file)
@@ -124,13 +125,13 @@ def run_preprocess(forward_reads, reverse_reads=None, config_path=None, threads=
     root_logger.addHandler(file_h)
 
     preprocess_cfg = config.get("preprocessing", {})
-    min_cov = preprocess_cfg.get("min_cov", 0.98)
-    min_identity = preprocess_cfg.get("min_identity", 0.9)
-    min_len_val = min_len if min_len is not None else preprocess_cfg.get("min_len", 20)
+    min_cov = preprocess_cfg.get("min_cov", DEFAULT_MIN_COV)
+    min_identity = preprocess_cfg.get("min_identity", DEFAULT_MIN_IDENTITY)
+    min_len_val = min_len if min_len is not None else preprocess_cfg.get("min_len", DEFAULT_MIN_LEN)
     index_i5_val = index_i5 if index_i5 is not None else preprocess_cfg.get("index_i5", True)
-    i5_mismatch_val = i5_mismatch if i5_mismatch is not None else preprocess_cfg.get("i5_mismatch", 2)
+    i5_mismatch_val = i5_mismatch if i5_mismatch is not None else preprocess_cfg.get("i5_mismatch", DEFAULT_I5_MISMATCH)
 
-    qc_val = preprocess_cfg.get("qc", True)
+    qc_val = preprocess_cfg.get("qc", DEFAULT_QC)
     if isinstance(qc_val, str):
         if qc_val.lower() in ('none', 'false', 'no', '0'):
             qc_val = False

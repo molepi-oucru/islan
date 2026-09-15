@@ -52,9 +52,8 @@ is_mapping:
   # Restricts the known-IS reference scan to this element only.
   # Leave null to scan all IS elements in targets_file.
   is_name: null
-  cutoff: 6               # Minimum read depth to report an insertion site
+  min_depth: 6            # Minimum read depth to report an insertion site
   merging: 100            # Bedtools merge distance for peak calling (bp)
-  is_length: 4000         # Max gap to pair endogenous IS flanks (bp)
   min_mapq: 30            # Min mapping quality (0 retains multi-mappers; discards 0 < MAPQ < min_mapq)
   flank_len: 300          # Flanking window around known IS boundaries (bp)
   threads: 8              # Threads for BWA and samtools

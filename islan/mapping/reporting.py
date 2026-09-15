@@ -356,7 +356,7 @@ def scan_known_is_positions(targets_fasta, ref_fasta, threads, tmp_dir, is_name=
             logging.info(f"Identified {len(known_is)} known IS element copies on the reference genome using BWA MEM fallback.")
     return known_is
 
-def parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_length, flank_len, targets_fasta, ref_fasta, threads, is_name=None):
+def parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, flank_len, targets_fasta, ref_fasta, threads, is_name=None):
     """
     Parse the bedtools output to find paired hits, chimeras, and single flanks.
     Uses reference target guide scan and coordinate overlap matching rules.
@@ -866,7 +866,7 @@ def calculate_detailed_stats(cov_data, chrom, start, end, bam_path):
         'read_count': read_count
     }
 
-def create_typing_output(left_merged, right_merged, left_cov, right_cov, ref_fasta, out_file, left_bam=None, right_bam=None, is_length=4000, flank_len=300, targets_fasta="config/targets.fasta", threads=1, is_name=None):
+def create_typing_output(left_merged, right_merged, left_cov, right_cov, ref_fasta, out_file, left_bam=None, right_bam=None, flank_len=300, targets_fasta="config/targets.fasta", threads=1, is_name=None):
     """
     Generate final summary table.
     """
@@ -879,7 +879,7 @@ def create_typing_output(left_merged, right_merged, left_cov, right_cov, ref_fas
     else:
         logging.warning("Reference is not GenBank. Gene annotation will be skipped.")
         
-    hits, known_is = parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, is_length, flank_len, targets_fasta, ref_fasta, threads, is_name=is_name)
+    hits, known_is = parse_bed_hits(left_merged, right_merged, left_cov, right_cov, features, flank_len, targets_fasta, ref_fasta, threads, is_name=is_name)
     
     # Separate into main table and unpaired singletons
     main_hits = []

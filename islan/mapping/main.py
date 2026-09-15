@@ -15,8 +15,8 @@ def run_is_mapping(args):
     # ------------------------------------------------------------------
     from islan.preprocess import load_config
     from islan.constants import (
-        DEFAULT_THREADS, DEFAULT_CUTOFF,
-        DEFAULT_MERGING, DEFAULT_IS_LENGTH, DEFAULT_MIN_MAPQ, DEFAULT_FLANK_LEN,
+        DEFAULT_THREADS, DEFAULT_MIN_DEPTH,
+        DEFAULT_MERGING, DEFAULT_MIN_MAPQ, DEFAULT_FLANK_LEN,
         ISElementRegistry,
     )
 
@@ -35,13 +35,14 @@ def run_is_mapping(args):
         cli_val = getattr(args, attr, None)
         if cli_val is not None:
             return cli_val
-        return cfg_mapping.get(cfg_key, default)
+        if cfg_key in cfg_mapping:
+            return cfg_mapping[cfg_key]
+        return cfg_mapping.get('cutoff', default)
 
     # Apply merged values back onto args so the rest of the function is unchanged
     args.threads   = _get('threads',   'threads',   DEFAULT_THREADS)
-    args.cutoff    = _get('cutoff',    'cutoff',    DEFAULT_CUTOFF)
+    args.min_depth = _get('min_depth', 'min_depth', DEFAULT_MIN_DEPTH)
     args.merging   = _get('merging',   'merging',   DEFAULT_MERGING)
-    args.is_length = _get('is_length', 'is_length', DEFAULT_IS_LENGTH)
     args.min_mapq  = _get('min_mapq',  'min_mapq',  DEFAULT_MIN_MAPQ)
     args.flank_len = _get('flank_len', 'flank_len', DEFAULT_FLANK_LEN)
     # is_name: CLI > config > None
@@ -147,7 +148,7 @@ def run_is_mapping(args):
         right_bam=right_bam,
         tmp_folder=tmp_dir,
         out_folder=out_dir,
-        cutoff=args.cutoff,
+        min_depth=args.min_depth,
         merging=args.merging
     )
 
@@ -163,7 +164,6 @@ def run_is_mapping(args):
         out_file=out_table,
         left_bam=left_bam,
         right_bam=right_bam,
-        is_length=args.is_length,
         flank_len=args.flank_len,
         targets_fasta=targets_fasta,
         threads=args.threads,
@@ -175,7 +175,7 @@ def run_is_mapping(args):
     generate_report(
         out_table, report_file,
         reference_file=args.reference,
-        cutoff=args.cutoff,
+        min_depth=args.min_depth,
         known_is=known_is,
         unpaired_hits=unpaired_hits,
         left_bam=left_bam,
